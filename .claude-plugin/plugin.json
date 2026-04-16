@@ -1,0 +1,9 @@
+{
+  "name": "moyan",
+  "description": "莫言 — 中文超省 token 模式。Ultra-compressed Chinese mode for Claude Code. Cuts ~70–80% tokens via terse 白话 or 文言. Supports 简体 / 繁體.",
+  "version": "0.1.0",
+  "author": {
+    "name": "moyan",
+    "url": "https://github.com/jaceyang97/moyan"
+  }
+}
