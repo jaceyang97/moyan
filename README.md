@@ -32,6 +32,8 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 
 ## 快速开始
 
+只需一个命令：
+
 ```
 /moyan            # 启动默认（精简模式，简繁随输入）
 /moyan 轻         # 轻度压缩，保留完整句
@@ -41,12 +43,10 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 /moyan 简         # 强制简体
 /moyan 繁 极      # 繁體 + 极度压缩
 
-/moyan-commit     # 生成简洁 commit 消息
-/moyan-review     # PR 审查评论一行式
-/moyan-help       # 速查卡
-
 停止莫言           # 恢复正常模式
 ```
+
+启动后写 commit、做 code review、答技术问题 —— 一律按莫言风格输出。无需切换。
 
 ## 风格对照
 
@@ -69,14 +69,16 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 - 多步顺序指令（片段排序易误）
 - 用户明确要求澄清
 
-## 技能一览
+## 涵盖场景
 
-| 技能 | 用途 |
+主技能 `moyan` 启动后自动覆盖：
+
+| 场景 | 行为 |
 |------|------|
-| `moyan` | 主压缩模式，持续生效 |
-| `moyan-commit` | Conventional Commits 格式中文 commit |
-| `moyan-review` | 一行式 PR 审查（`L42: bug：user 可空。加判空守卫。`）|
-| `moyan-help` | 速查卡，一次性显示 |
+| 普通问答 | 按当前强度（轻 / 精 / 极 / 文言）压缩输出 |
+| 写 commit | 转 Conventional Commits，标题 ≤50 字符，only-when-needed body |
+| code review | 一行式：`L42: 🔴 bug：user 可空。加判空守卫。` |
+| 安全 / 破坏性操作 | 自动暂停压缩，完整叙述后恢复 |
 
 ## 仓库结构
 
@@ -86,14 +88,12 @@ moyan/
 │   ├── plugin.json
 │   └── marketplace.json
 ├── skills/
-│   ├── moyan/SKILL.md
-│   ├── moyan-commit/SKILL.md
-│   ├── moyan-review/SKILL.md
-│   └── moyan-help/SKILL.md
-└── README.md
+│   └── moyan/SKILL.md
+├── README.md
+└── LICENSE
 ```
 
-就这些。无脚本、无依赖、无配置文件。改 SKILL.md 即改行为。
+就这些。一个 SKILL.md 装下全部行为。无脚本、无依赖、无 hooks。
 
 ## 致谢 / 缘起
 
