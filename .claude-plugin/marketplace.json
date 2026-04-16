@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "moyan",
-  "description": "莫言 — 中文超省 token 模式 for Claude Code。简繁文言皆可。",
+  "description": "莫言 — 中文超省 token 模式 for Claude Code。简繁文言文皆可。",
   "owner": {
     "name": "moyan",
     "url": "https://github.com/jaceyang97/moyan"
@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "moyan",
-      "description": "莫言：少言多意。Terse Chinese replies. 简体 / 繁體 / 文言 all supported.",
+      "description": "莫言：少言多意。Terse Chinese replies. 简体 / 繁體 / 文言文 all supported.",
       "source": "./",
       "category": "productivity"
     }

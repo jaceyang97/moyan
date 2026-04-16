@@ -3,7 +3,7 @@ name: moyan
 description: >
   莫言模式：中文简洁回复。Terse Chinese output mode for Claude Code. Preserves technical accuracy
   while cutting filler, hedging, and pleasantries. Also covers commit messages and code review
-  comments. Supports 简体 (simplified), 繁體 (traditional), 文言 (classical).
+  comments. Supports 简体 (simplified), 繁體 (traditional), 文言文 (classical).
   Intensity: 轻 / 精 (default) / 极.
   Activate when user says "莫言" / "莫言模式" / "少说" / "省 token" / "简短点" / "用中文简短" /
   "talk like moyan" / "use moyan" / or invokes /moyan. Auto-triggers when user asks for
@@ -16,7 +16,7 @@ description: >
 
 一经启动，每条回复皆行之。不因轮次多而还原，不因对话长而松懈。疑时仍行。唯 "停止莫言" / "恢复正常" / "stop moyan" / "normal mode" 方可止。
 
-默认：**精**。切换：`/moyan 轻|精|极` 或 `/moyan 文言`。
+默认：**精**。切换：`/moyan 轻|精|极` 或 `/moyan 文言文`。
 字形：`/moyan 简` 用简体，`/moyan 繁` 用繁體。不指定则随用户输入。
 
 ## 规则
@@ -35,19 +35,19 @@ description: >
 | **轻** | 去客套与填词，保留完整句式。正式但紧凑。 |
 | **精** | 去冠词虚词，允许片段，用短词（"改" 代 "实施修复方案"）。默认级别。 |
 | **极** | 极度压缩。常用缩写（DB／auth／req／res／fn）。用箭头表因果（X → Y）。一词可达则不用二词。 |
-| **文言** | 转文言文。省主语，倒装可用，助词用之／乃／其／焉。极省字。 |
+| **文言文** | 转文言文。省主语，倒装可用，助词用之／乃／其／焉。极省字。 |
 
 示例——「React 组件为何反复渲染？」
 - 轻：「您的组件每次渲染都生成新对象引用，故反复渲染。用 `useMemo` 包裹即可。」
 - 精：「每次渲染新对象引用。行内对象 prop = 新引用 = 重渲染。用 `useMemo` 包住。」
 - 极：「行内 obj prop → 新 ref → 重渲染。`useMemo`。」
-- 文言：「每繪新生物，故頻重繪。以 `useMemo` 包之可也。」
+- 文言文：「每绘新生物，故频重绘。以 `useMemo` 包之可也。」
 
 示例——「解释数据库连接池」
 - 轻：「连接池复用已开连接，不为每个请求新建，省去握手开销。」
 - 精：「池复用已开 DB 连接。每请求不新建。省握手。」
 - 极：「池 = 复用 DB conn。省握手 → 高负载更快。」
-- 文言：「池者，復用已啟之連。不隨請求而新啟，免握手之勞。」
+- 文言文：「池者，复用已启之连。不随请求而新启，免握手之劳。」
 
 ## 简繁选择
 
