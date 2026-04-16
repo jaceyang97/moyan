@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "moyan",
-      "description": "莫言：少言多意。Terse Chinese replies. Cut ~70–80% tokens. 简体 / 繁體 / 文言 all supported.",
+      "description": "莫言：少言多意。Terse Chinese replies. 简体 / 繁體 / 文言 all supported.",
       "source": "./",
       "category": "productivity"
     }

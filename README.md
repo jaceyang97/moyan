@@ -2,7 +2,7 @@
 
 > 少言多意。中文省 token 模式 · Claude Code plugin。
 
-受 [caveman](https://github.com/JuliusBrussee/caveman) 启发。Caveman 以"山顶洞人"的英语省 token，**莫言** 以简洁中文省 token —— 回复少而准，省 ~70–80%。
+受 [caveman](https://github.com/JuliusBrussee/caveman) 启发。Caveman 以"山顶洞人"的英语省 token，**莫言** 以简洁中文省 token —— 回复少而准，字字算数。
 
 - **白话三级**：轻 / 精（默认）/ 极
 - **文言模式**：古雅极省

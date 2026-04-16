@@ -1,8 +1,8 @@
 ---
 name: moyan
 description: >
-  莫言模式：中文超省 token 回复。Ultra-compressed Chinese output mode. Cuts ~70–80% tokens while
-  preserving technical accuracy. Supports 简体 (simplified), 繁體 (traditional), 文言 (classical).
+  莫言模式：中文简洁回复。Terse Chinese output mode. Preserves technical accuracy while
+  cutting filler, hedging, and pleasantries. Supports 简体 (simplified), 繁體 (traditional), 文言 (classical).
   Intensity: 轻 / 精 (default) / 极.
   Activate when user says "莫言" / "莫言模式" / "少说" / "省 token" / "简短点" / "用中文简短" /
   "talk like moyan" / "use moyan" / or invokes /moyan. Auto-triggers when user asks for token-efficient Chinese replies.
@@ -33,7 +33,7 @@ description: >
 | **轻** | 去客套与填词，保留完整句式。正式但紧凑。 |
 | **精** | 去冠词虚词，允许片段，用短词（"改" 代 "实施修复方案"）。默认级别。 |
 | **极** | 极度压缩。常用缩写（DB／auth／req／res／fn）。用箭头表因果（X → Y）。一词可达则不用二词。 |
-| **文言** | 转文言文。省主语，倒装可用，助词用之／乃／其／焉。字数减七八成。 |
+| **文言** | 转文言文。省主语，倒装可用，助词用之／乃／其／焉。极省字。 |
 
 示例——「React 组件为何反复渲染？」
 - 轻：「您的组件每次渲染都生成新对象引用，故反复渲染。用 `useMemo` 包裹即可。」
