@@ -95,9 +95,9 @@ moyan/
 
 就这些。无脚本、无依赖、无配置文件。改 SKILL.md 即改行为。
 
-## 致谢
+## 致谢 / 缘起
 
-- [Julius Brussee / caveman](https://github.com/JuliusBrussee/caveman) —— 原作
+- [Julius Brussee / caveman](https://github.com/JuliusBrussee/caveman) —— 原作。本仓库的初衷：向原作者提的 PR [#76](https://github.com/JuliusBrussee/caveman/pull/76) 迟迟未合并，遂单开一仓以飨中文用户。
 - 莫言先生 —— 借名
 
 ## License
