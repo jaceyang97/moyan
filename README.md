@@ -77,7 +77,7 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 |------|------|
 | 普通问答 | 按当前强度（轻 / 精 / 极 / 文言文）压缩输出 |
 | 写 commit | 转 Conventional Commits，标题 ≤50 字符，only-when-needed body |
-| code review | 一行式：`L42: 🔴 bug：user 可空。加判空守卫。` |
+| code review | 一行式：`L42: 重：user 可空。加判空守卫。` |
 | 安全 / 破坏性操作 | 自动暂停压缩，完整叙述后恢复 |
 
 ## 仓库结构
