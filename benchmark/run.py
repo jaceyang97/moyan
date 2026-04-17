@@ -11,7 +11,7 @@ import argparse
 import json
 import sys
 import time
-from pathlib import Path
+from pathlib import Path  # noqa: F401 (used below)
 
 from lib import (
     GROUPS,
@@ -123,6 +123,7 @@ def main():
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--limit", type=int, default=0, help="only run first N prompts (0 = all)")
     ap.add_argument("--prompt-ids", default="", help="comma-separated prompt IDs; overrides --limit")
+    ap.add_argument("--prompt-file", default="", help="path to file with one prompt ID per line (e.g. splits/train.txt)")
     ap.add_argument("--categories", default="", help="comma-separated categories to include")
     ap.add_argument("--force", action="store_true", help="overwrite existing traces")
     args = ap.parse_args()
@@ -134,8 +135,12 @@ def main():
             raise SystemExit(f"unknown group: {g}. valid: {list(GROUPS)}")
 
     prompts = load_prompts()
+    wanted: set[str] = set()
+    if args.prompt_file:
+        wanted.update(l.strip() for l in Path(args.prompt_file).read_text().splitlines() if l.strip())
     if args.prompt_ids:
-        wanted = {p.strip() for p in args.prompt_ids.split(",")}
+        wanted.update(p.strip() for p in args.prompt_ids.split(","))
+    if wanted:
         prompts = [p for p in prompts if p["id"] in wanted]
     if args.categories:
         cats = {c.strip() for c in args.categories.split(",")}
