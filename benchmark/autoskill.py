@@ -118,7 +118,10 @@ def git_revert_to(sha: str):
 # ------------------------- Eval -------------------------
 
 def run_bench(run_id: str, prompt_file: Path, groups: str = "D_moyan_jing",
-              model: str = BENCH_MODEL, samples: int = 1, force: bool = True):
+              model: str = BENCH_MODEL, samples: int = 1, force: bool = True,
+              max_attempts: int = 3, min_traces: int = 30):
+    """Run benchmark, streaming output to a log file. Retries on failure;
+    drops --force after first attempt so completed traces are skipped (resume)."""
     cmd = [
         sys.executable, "-u", str(BENCH_ROOT / "run.py"),
         "--run-id", run_id,
@@ -129,11 +132,32 @@ def run_bench(run_id: str, prompt_file: Path, groups: str = "D_moyan_jing",
     ]
     if force:
         cmd.append("--force")
-    r = subprocess.run(cmd, cwd=BENCH_ROOT, capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"!! bench failed: {r.stderr[-500:]}", file=sys.stderr)
-        return False
-    return True
+    log_path = BENCH_ROOT / "traces" / run_id / "_bench.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    primary_group = groups.split(",")[0]
+    for attempt in range(1, max_attempts + 1):
+        with log_path.open("a") as logf:
+            logf.write(f"\n--- attempt {attempt} ---\n")
+            r = subprocess.run(cmd, cwd=BENCH_ROOT, stdout=logf,
+                               stderr=subprocess.STDOUT)
+        if "--force" in cmd:
+            cmd.remove("--force")  # subsequent attempts resume
+        n = len(list((BENCH_ROOT / "traces" / run_id).glob(f"*__{primary_group}__*.json")))
+        if r.returncode == 0 and n >= min_traces:
+            return True
+        print(f"!! bench attempt {attempt}: rc={r.returncode}, traces={n}", file=sys.stderr)
+        time.sleep(5 * attempt)
+    return False
+
+
+def maybe_push(branch: str):
+    """Best-effort git push. Doesn't raise on failure."""
+    try:
+        r = subprocess.run(["git", "push", "-u", "origin", branch],
+                           cwd=REPO_ROOT, capture_output=True, text=True, timeout=60)
+        print(f"  push {branch}: {'ok' if r.returncode == 0 else r.stderr[-200:]}", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"!! push exception: {e}", file=sys.stderr)
 
 
 def load_out_tokens(run_id: str, group: str) -> dict[str, int]:
@@ -375,6 +399,8 @@ def main():
                     help="stop if no improvement > 0.02 in last K iters")
     ap.add_argument("--judge-every", type=int, default=3,
                     help="run subset judge every N iterations")
+    ap.add_argument("--push-branch", default="",
+                    help="git branch to push after each kept iter (best-effort)")
     ap.add_argument("--dry-run", action="store_true", help="run proposer once and exit")
     args = ap.parse_args()
 
@@ -387,109 +413,142 @@ def main():
     history = load_tsv()
     best_score = max((h["score"] for h in history), default=-1.0)
 
-    # Baseline delta for iter 0 reference: use baseline_run_id's D traces if present.
-    # If this is a fresh start, first proposal sees v0 data.
     for i in range(len(history), len(history) + args.max_iters):
-        print(f"\n{'='*60}\nautoskill iter {i} · best_score={best_score:.3f}\n{'='*60}")
-
-        current = SKILL_PATH.read_text(encoding="utf-8")
-        frontmatter, old_body = split_skill(current)
+        print(f"\n{'='*60}\nautoskill iter {i} · best_score={best_score:.3f}  ({time.strftime('%H:%M:%S')})\n{'='*60}", flush=True)
         parent_sha = git_head()
-
-        # 1. Propose
         try:
-            proposal = propose(client, old_body, args.baseline_run_id, history, best_score)
-        except Exception as e:  # noqa: BLE001
-            print(f"!! proposal failed: {e}", file=sys.stderr)
+            current = SKILL_PATH.read_text(encoding="utf-8")
+            frontmatter, old_body = split_skill(current)
+
+            # 1. Propose
+            try:
+                proposal = propose(client, old_body, args.baseline_run_id, history, best_score)
+            except Exception as e:  # noqa: BLE001
+                print(f"!! proposal failed: {e}", file=sys.stderr)
+                append_tsv({
+                    "iter": i, "timestamp": int(time.time()),
+                    "hypothesis": f"proposal_error: {type(e).__name__}",
+                    "score": -1, "delta_median": float("nan"), "n_paired": 0,
+                    "completeness_full": "", "guard_fails": 0,
+                    "decision": "proposal_failed", "commit_sha": parent_sha,
+                    "proposer_tokens_in": 0, "proposer_tokens_out": 0,
+                })
+                history = load_tsv()
+                time.sleep(30)
+                continue
+
+            hypothesis = proposal["hypothesis"]
+            new_body = proposal["new_skill_md_body"]
+            print(f"hypothesis: {hypothesis}", flush=True)
+
+            # 2. Validate
+            ok, reason = validate_proposal(new_body, old_body)
+            if not ok:
+                print(f"!! invalid proposal ({reason})", flush=True)
+                append_tsv({
+                    "iter": i, "timestamp": int(time.time()),
+                    "hypothesis": hypothesis, "score": -1,
+                    "delta_median": float("nan"), "n_paired": 0,
+                    "completeness_full": "", "guard_fails": 0,
+                    "decision": f"rejected:{reason}", "commit_sha": parent_sha,
+                    "proposer_tokens_in": proposal["_usage"]["input_tokens"],
+                    "proposer_tokens_out": proposal["_usage"]["output_tokens"],
+                })
+                history = load_tsv()
+                continue
+
+            if args.dry_run:
+                print("--dry-run: stopping after proposal")
+                print(f"\n--- PROPOSED BODY (first 500 chars) ---\n{new_body[:500]}")
+                return
+
+            # 3. Write + commit
+            write_skill(new_body)
+            git_commit_skill(f"autoskill {args.tag} iter {i}: {hypothesis}")
+
+            # 4. Eval (with retry; streams to traces/{run_id}/_bench.log)
+            run_id = f"autoskill_{args.tag}_{i:03d}"
+            ok = run_bench(run_id, TRAIN_LIST)
+            if not ok:
+                print("!! bench failed permanently, reverting", flush=True)
+                git_revert_to(parent_sha)
+                append_tsv({
+                    "iter": i, "timestamp": int(time.time()),
+                    "hypothesis": hypothesis, "score": -1,
+                    "delta_median": float("nan"), "n_paired": 0,
+                    "completeness_full": "", "guard_fails": 0,
+                    "decision": "bench_failed", "commit_sha": parent_sha,
+                    "proposer_tokens_in": proposal["_usage"]["input_tokens"],
+                    "proposer_tokens_out": proposal["_usage"]["output_tokens"],
+                })
+                history = load_tsv()
+                continue
+
+            delta_med, n_paired = compute_delta_median(run_id, args.baseline_run_id)
+            gfails = guard_fails(run_id, "D_moyan_jing")
+
+            completeness = None
+            if (i + 1) % args.judge_every == 0:
+                print("running judge subset...", flush=True)
+                try:
+                    completeness = run_judge_subset(run_id, args.baseline_run_id)
+                except Exception as e:  # noqa: BLE001
+                    print(f"!! judge failed: {e}", file=sys.stderr)
+
+            score = compute_score(delta_med, completeness, gfails)
+            print(f"Δ_med={delta_med:.3f}  completeness_full={completeness}  guard_fails={gfails}  score={score:.3f}", flush=True)
+
+            # 5. Keep or revert
+            if score > best_score + 0.02:
+                best_score = score
+                decision = "keep"
+                kept_sha = git_head()
+                if args.push_branch:
+                    maybe_push(args.push_branch)
+            else:
+                git_revert_to(parent_sha)
+                decision = "revert"
+                kept_sha = parent_sha
+
+            append_tsv({
+                "iter": i, "timestamp": int(time.time()),
+                "hypothesis": hypothesis, "score": round(score, 4),
+                "delta_median": round(delta_med, 4), "n_paired": n_paired,
+                "completeness_full": "" if completeness is None else round(completeness, 3),
+                "guard_fails": gfails, "decision": decision, "commit_sha": kept_sha,
+                "proposer_tokens_in": proposal["_usage"]["input_tokens"],
+                "proposer_tokens_out": proposal["_usage"]["output_tokens"],
+            })
+            history = load_tsv()
+
+        except KeyboardInterrupt:
+            print("\n!! interrupted, stopping cleanly", flush=True)
             break
-
-        hypothesis = proposal["hypothesis"]
-        new_body = proposal["new_skill_md_body"]
-        print(f"hypothesis: {hypothesis}")
-
-        # 2. Validate
-        ok, reason = validate_proposal(new_body, old_body)
-        if not ok:
-            print(f"!! invalid proposal ({reason}), logging as rejected")
+        except Exception as e:  # noqa: BLE001
+            # Belt-and-suspenders: any unhandled error → log, restore tree, continue.
+            print(f"!! iter {i} crashed with {type(e).__name__}: {e}", file=sys.stderr)
+            try:
+                git_revert_to(parent_sha)
+            except Exception:
+                pass
             append_tsv({
                 "iter": i, "timestamp": int(time.time()),
-                "hypothesis": hypothesis, "score": -1,
-                "delta_median": float("nan"), "n_paired": 0,
+                "hypothesis": f"crash: {type(e).__name__}",
+                "score": -1, "delta_median": float("nan"), "n_paired": 0,
                 "completeness_full": "", "guard_fails": 0,
-                "decision": f"rejected:{reason}", "commit_sha": parent_sha,
-                "proposer_tokens_in": proposal["_usage"]["input_tokens"],
-                "proposer_tokens_out": proposal["_usage"]["output_tokens"],
+                "decision": "iter_crashed", "commit_sha": parent_sha,
+                "proposer_tokens_in": 0, "proposer_tokens_out": 0,
             })
             history = load_tsv()
+            time.sleep(30)
             continue
 
-        if args.dry_run:
-            print("--dry-run: stopping after proposal")
-            print(f"\n--- PROPOSED BODY (first 500 chars) ---\n{new_body[:500]}")
-            return
-
-        # 3. Write + commit
-        write_skill(new_body)
-        git_commit_skill(f"autoskill {args.tag} iter {i}: {hypothesis}")
-
-        # 4. Eval
-        run_id = f"autoskill_{args.tag}_{i:03d}"
-        ok = run_bench(run_id, TRAIN_LIST)
-        if not ok:
-            print("!! bench failed, reverting")
-            git_revert_to(parent_sha)
-            append_tsv({
-                "iter": i, "timestamp": int(time.time()),
-                "hypothesis": hypothesis, "score": -1,
-                "delta_median": float("nan"), "n_paired": 0,
-                "completeness_full": "", "guard_fails": 0,
-                "decision": "bench_failed", "commit_sha": parent_sha,
-                "proposer_tokens_in": proposal["_usage"]["input_tokens"],
-                "proposer_tokens_out": proposal["_usage"]["output_tokens"],
-            })
-            history = load_tsv()
-            continue
-
-        delta_med, n_paired = compute_delta_median(run_id, args.baseline_run_id)
-        gfails = guard_fails(run_id, "D_moyan_jing")
-
-        completeness = None
-        if (i + 1) % args.judge_every == 0:
-            print("running judge subset...")
-            completeness = run_judge_subset(run_id, args.baseline_run_id)
-
-        score = compute_score(delta_med, completeness, gfails)
-        print(f"Δ_med={delta_med:.3f}  completeness_full={completeness}  guard_fails={gfails}  score={score:.3f}")
-
-        # 5. Keep or revert
-        if score > best_score + 0.02:
-            best_score = score
-            decision = "keep"
-            kept_sha = git_head()
-        else:
-            git_revert_to(parent_sha)
-            decision = "revert"
-            kept_sha = parent_sha
-
-        append_tsv({
-            "iter": i, "timestamp": int(time.time()),
-            "hypothesis": hypothesis, "score": round(score, 4),
-            "delta_median": round(delta_med, 4), "n_paired": n_paired,
-            "completeness_full": "" if completeness is None else round(completeness, 3),
-            "guard_fails": gfails, "decision": decision, "commit_sha": kept_sha,
-            "proposer_tokens_in": proposal["_usage"]["input_tokens"],
-            "proposer_tokens_out": proposal["_usage"]["output_tokens"],
-        })
-        history = load_tsv()
-
-        # 6. Plateau check
+        # 6. Plateau check (only after successful iters)
         if len(history) >= args.plateau_k:
             recent = history[-args.plateau_k:]
-            best_recent = max(r["score"] for r in recent if r["decision"] == "keep") \
-                if any(r["decision"] == "keep" for r in recent) else -1
-            kept_in_window = sum(1 for r in recent if r["decision"] == "keep")
-            if kept_in_window == 0:
-                print(f"plateau: no improvement in last {args.plateau_k} iters, stopping")
+            kept = sum(1 for r in recent if r["decision"] == "keep")
+            if kept == 0:
+                print(f"plateau: 0 keeps in last {args.plateau_k} iters, stopping", flush=True)
                 break
 
     print(f"\ndone. best_score={best_score:.3f}  total iters={len(history)}")
