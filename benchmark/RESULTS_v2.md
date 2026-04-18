@@ -288,6 +288,48 @@ python run.py --run-id v0 \
 
 ---
 
+## Track D：autoskill 在新 regime 下续跑（2026-04-18）
+
+Track C 以 SKILL.md v2.2 收尾后，重建 regime：
+- **基线**：`sonnet-baseline`（Sonnet 4.6 全 71 prompt B_zh_normal，冷跑）
+- **判官**：`claude-opus-4-7`（三方 κ 三角测量显示 Opus 4.6 是宽松离群点，`completeness_target` 随之从 0.40 降至 0.30）
+- **评分公式**不变：`score = delta_median − 0.5 × max(0, 0.30 − full_rate) − 0.2 × guard_fails`
+
+### 迭代日志（train 53 / holdout 18 prompt）
+
+| iter | 假设 | train n=2 | holdout | full_rate | 判定 |
+|---|---|---|---|---|---|
+| probe | v2.2 未改 | **0.6748 / 0.6688 → 0.6718** | — | 0.40 | BEST 建立 |
+| 3 | 精 ≤40% → ≤35% | 0.6469 / 0.6698 → 0.6584 | skip | — | discard（−1.3pp，内容被挤压）|
+| 4 | 填词 += 同时/具体/本身 | 0.6709 / 0.6709 → 0.6709 | skip | — | discard（−0.09pp 噪声内）|
+| 5 | **版式**：去 `---`、短答去 `##` | 0.6963 / 0.6933 → **0.6948** | **0.7237** | 0.40 / 0.30 | **KEEP** |
+
+### Track D 结论
+
+1. **结构规则 > 词表扩张。** 去横线/去短标题是单一最大单项改进：train +2.3pp、holdout +5.2pp（+5.2 > +2.3 表示规则泛化，不是 train 过拟合）。
+2. **Opus 4.7 判官比 4.6 严约 12pp full-rate。** 同一 SKILL.md 同一 traces，Opus 4.6 full=0.44，Opus 4.7 full=0.315。目标从 0.40 调到 0.30 后，模型再次进入「能通过 gate」的区间。
+3. **v2.2 plateau 被 v2.3 打破。** 新 BEST：训练 0.6948 / holdout 0.7237（注：与 Track C 的 74.5% 不直接可比，Track C 是文言文 holdout，本表是精 train/holdout。指标口径不同）。
+4. **SKILL.md 最新版**是 `485f1ef`（在 v2.2 基础上加一行版式规则）。frontmatter 未改，仍标记 `version: "2.2"`——下次语义级版本跳跃时一起升。
+
+### 复现 Track D
+
+```bash
+cd benchmark
+BASELINE_RUN_ID=sonnet-baseline
+
+# probe（BEST 建立）
+python evaluate.py --run-id probe_v22_a --baseline-run-id $BASELINE_RUN_ID
+python evaluate.py --run-id probe_v22_b --baseline-run-id $BASELINE_RUN_ID
+
+# 结构性 iter（当前 BEST 版）
+python evaluate.py --run-id iter_005_a --baseline-run-id $BASELINE_RUN_ID
+python evaluate.py --run-id iter_005_b --baseline-run-id $BASELINE_RUN_ID
+python evaluate.py --run-id iter_005_a --baseline-run-id $BASELINE_RUN_ID --with-judge --skip-bench
+python evaluate.py --run-id holdout_005 --baseline-run-id $BASELINE_RUN_ID --split holdout --with-judge
+```
+
+---
+
 ## 后续可做
 
 - 跑 Haiku 4.5 看小模型是否对压缩规则响应更强
