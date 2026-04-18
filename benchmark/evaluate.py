@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts
+from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts, prompt_question
 
 MOYAN_GROUP = "D_moyan_jing"
 DEFAULT_MODEL = "claude-sonnet-4-6"   # bench respondent — high volume, want speed
@@ -138,7 +138,7 @@ def run_judge_subset(iter_run_id: str, baseline_run_id: str,
         moy = json.loads(iter_traces[pid].read_text(encoding="utf-8"))
         if base.get("error") or moy.get("error"):
             continue
-        q = prompts[pid].get("prompt") or " | ".join(prompts[pid].get("turns", []))
+        q = prompt_question(prompts[pid])
         try:
             j = judge_pair(client=client, judge_model=JUDGE_MODEL,
                            question=q, baseline_resp=base["response"],

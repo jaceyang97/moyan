@@ -167,6 +167,11 @@ def load_prompts() -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def prompt_question(prompt: dict) -> str:
+    """Flatten a prompt spec (single-turn or multi-turn) into one string for the judge."""
+    return prompt.get("prompt") or " | ".join(prompt.get("turns", []))
+
+
 # ---------- API client ----------
 
 def call_claude(

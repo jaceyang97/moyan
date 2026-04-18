@@ -14,12 +14,14 @@ Regenerate after any new iteration:
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+from lib import BASELINE_GROUP
+
 BENCH = Path(__file__).resolve().parent
-BASELINE_GROUP = "B_zh_normal"
 
 # --- timeline ---------------------------------------------------------------
 # Δ = moyan 精 holdout Δ_median vs B_zh_normal (same prompts, same metric).
@@ -111,21 +113,17 @@ def render(out_path: Path):
     xs = [e["x"] for e in EVENTS]
     bsf = best_so_far(EVENTS)
 
-    # 1. best-so-far step line
     ax.step(xs, bsf, where="post", color=GREEN, linewidth=2.4,
             alpha=0.9, zorder=2)
     ax.fill_between(xs, [min(e["d"] for e in EVENTS) - 2] * len(xs), bsf,
                     step="post", color=GREEN, alpha=0.05, zorder=1)
 
-    # 2. per-prompt scatter cloud (faint, under the headline dot)
-    import random
     rng = random.Random(0)
     for x, cloud in CLOUDS.items():
         jx = [x + (rng.random() - 0.5) * 0.45 for _ in cloud]
         ax.scatter(jx, cloud, s=14, color=GREEN, alpha=0.18,
                    edgecolor="none", zorder=3)
 
-    # 3. headline dot for every iteration
     for e in EVENTS:
         color = GREEN if e["keep"] else GRAY
         marker = e.get("marker", "o")
@@ -133,7 +131,6 @@ def render(out_path: Path):
         ax.scatter(e["x"], e["d"], c=color, marker=marker, s=size,
                    edgecolor=DARK if e["keep"] else "#888",
                    linewidth=0.9, zorder=5)
-        # number above every dot
         ax.annotate(f"{e['d']:.1f}",
                     xy=(e["x"], e["d"]),
                     xytext=(0, 9 if e["keep"] else 7),
@@ -143,7 +140,6 @@ def render(out_path: Path):
                     color=DARK if e["keep"] else "#888",
                     weight="semibold" if e["keep"] else "normal")
 
-    # 4. model-switch + track dividers
     for x, text, color in [
         (5.5, "Sonnet 4.5 → 4.6", "#9467bd"),
         (11.5, "SKILL.md v2.2 (−29%)", "#ff7f0e"),
@@ -153,13 +149,12 @@ def render(out_path: Path):
                 ha="center", va="bottom",
                 bbox=dict(facecolor="white", edgecolor="none", alpha=0.9, pad=2))
 
-    # 5. axes, title
     ax.set_xlabel("experiment timeline", fontsize=11, color="#333")
     ax.set_ylabel("token reduction  Δ_median  (%)", fontsize=11, color="#333")
     ax.set_title("moyan: token-compression progression",
                  fontsize=15, pad=18, color=DARK, weight="bold")
     ax.text(0.5, 1.015,
-            "Sonnet 4.6 · holdout median · vs Chinese-normal baseline · 精 unless ★ = 文言文",
+            "Sonnet responder · holdout median · vs Chinese-normal baseline · 精 unless ★ = 文言文",
             transform=ax.transAxes, ha="center", fontsize=9.5, color="#666")
 
     ax.set_xticks(xs)
@@ -169,7 +164,6 @@ def render(out_path: Path):
     ax.set_xlim(-0.6, len(EVENTS) - 0.4)
     ax.tick_params(axis="y", labelcolor="#444", labelsize=9)
 
-    # 6. minimal legend — 3 items only
     handles = [
         plt.Line2D([], [], marker="o", color="w", markerfacecolor=GREEN,
                    markeredgecolor=DARK, markersize=10, label="kept"),
@@ -180,7 +174,6 @@ def render(out_path: Path):
     ax.legend(handles=handles, loc="lower right", fontsize=9,
               framealpha=0.95, edgecolor="#ddd", ncol=3)
 
-    # 7. current-best callout
     best = EVENTS[-1]
     ax.annotate(f"current best  {best['d']:.1f}%",
                 xy=(best["x"], best["d"]),

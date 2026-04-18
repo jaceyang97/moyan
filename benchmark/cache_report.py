@@ -17,9 +17,8 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
-from pathlib import Path
 
-from lib import BENCH_ROOT, GROUPS
+from lib import BASELINE_GROUP, BENCH_ROOT, GROUPS
 
 
 CACHE_MULT = {"input": 1.00, "creation": 1.25, "read": 0.10}
@@ -42,15 +41,14 @@ def main():
     ap.add_argument("--run-id", required=True)
     args = ap.parse_args()
 
-    # buckets: (group, turn_idx) → totals
     bucket: dict[tuple[str, int], dict[str, float]] = defaultdict(
         lambda: {"n": 0, "in": 0, "cache_r": 0, "cache_w": 0, "out": 0, "eff_in": 0.0})
 
     for t in iter_traces(args.run_id):
         if t.get("error"):
             continue
-        # Reconstruct turn index from filename or turns length.
-        turn_idx = max(0, len(t["turns"]) // 2 - 1)  # turns is [u,a,u,a,...]
+        # turns layout is [u, a, u, a, ...]; turn index = assistant-reply index
+        turn_idx = max(0, len(t["turns"]) // 2 - 1)
         u = t["usage"]
         b = bucket[(t["group"], turn_idx)]
         b["n"] += 1
@@ -78,9 +76,8 @@ def main():
                   f"{b['cache_w']/n:>11.0f} {b['out']/n:>8.0f} {b['eff_in']/n:>10.1f} "
                   f"{cache_hit_pct:>9.1f}%")
 
-    # Headline: for each moyan group, effective-input savings vs B (baseline) on turn 0.
-    print("\n--- turn-0 effective input tokens vs B_zh_normal ---")
-    base = bucket.get(("B_zh_normal", 0))
+    print(f"\n--- turn-0 effective input tokens vs {BASELINE_GROUP} ---")
+    base = bucket.get((BASELINE_GROUP, 0))
     if base and base["n"]:
         base_eff = base["eff_in"] / base["n"]
         for g in groups:
@@ -92,7 +89,6 @@ def main():
             sign = "+" if delta >= 0 else ""
             print(f"  {g:<20}  eff_in={g_eff:>7.1f}   Δ vs B = {sign}{delta:.1f}")
 
-    # Multi-turn: compare turn-0 vs turn-N to show cache warming up.
     mt_turns = [t for t in turns if t > 0]
     if mt_turns:
         print("\n--- multi-turn cache warm-up (same group, turn 0 vs last) ---")

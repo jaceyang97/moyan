@@ -12,7 +12,6 @@ import argparse
 import json
 import statistics
 from collections import defaultdict
-from pathlib import Path
 
 from lib import BASELINE_GROUP, MOYAN_GROUPS, BENCH_ROOT, load_prompts
 
@@ -45,7 +44,6 @@ def main():
     def split_of(pid: str) -> str:
         return "holdout" if pid in holdout_ids else "train" if pid in train_ids else "?"
 
-    # For each (moyan_group, split), collect per-prompt Δ.
     buckets: dict[tuple[str, str], list[tuple[str, float]]] = defaultdict(list)
     cat_buckets: dict[tuple[str, str, str], list[float]] = defaultdict(list)
 

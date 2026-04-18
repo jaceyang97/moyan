@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-from lib import BASELINE_GROUP, MOYAN_GROUPS, BENCH_ROOT, get_client, load_prompts
+from lib import BASELINE_GROUP, MOYAN_GROUPS, BENCH_ROOT, get_client, load_prompts, prompt_question
 
 JUDGE_SYSTEM = """You are an impartial technical judge. You will be shown a user question and two candidate answers (Response A and Response B). Evaluate whether Response B preserves all the technical substance of Response A.
 
@@ -158,7 +158,6 @@ def main():
         prompts = {pid: p for pid, p in prompts.items() if pid in wanted}
     moyan_groups = [g.strip() for g in args.moyan_groups.split(",")]
 
-    # Discover model IDs present in traces if not given.
     trace_dir = BENCH_ROOT / "traces" / args.run_id
     if not trace_dir.exists():
         raise SystemExit(f"no traces at {trace_dir}")
@@ -192,7 +191,7 @@ def main():
                     if baseline.get("error") or moyan.get("error"):
                         continue
 
-                    question = prompt.get("prompt") or " | ".join(prompt.get("turns", []))
+                    question = prompt_question(prompt)
                     try:
                         judgment = judge_pair(
                             client=client,

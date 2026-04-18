@@ -18,7 +18,7 @@ import json
 import random
 from pathlib import Path
 
-from lib import BASELINE_GROUP, MOYAN_GROUPS, BENCH_ROOT, get_client, load_prompts
+from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts, prompt_question
 from judge import judge_pair, load_response
 
 
@@ -38,36 +38,35 @@ def cmd_judge2(args):
     """Run a second judge on the same pairs that judge.py produced."""
     client = get_client()
     prompts = {p["id"]: p for p in load_prompts()}
-    moyan_groups = [g.strip() for g in args.moyan_groups.split(",")]
 
-    trace_dir = BENCH_ROOT / "traces" / args.run_id
-    primary_jdir = trace_dir / "_judgments"
+    primary_jdir = BENCH_ROOT / "traces" / args.run_id / "_judgments"
     if not primary_jdir.exists():
         raise SystemExit(f"no primary judgments at {primary_jdir} — run judge.py first")
 
-    # Find all primary judgments — those define which pairs to judge again.
-    primary_files = sorted(primary_jdir.glob("*.json"))
+    # Primary judgments define which pairs to judge again. Parse each file once;
+    # carry (path, dict) so --limit stratification doesn't re-parse later.
+    primary: list[tuple[Path, dict]] = []
+    for f in sorted(primary_jdir.glob("*.json")):
+        try:
+            primary.append((f, json.loads(f.read_text(encoding="utf-8"))))
+        except Exception:
+            continue
 
-    # Stratified-by-primary-verdict sampling if --limit is set.
     rng = random.Random(args.rng_seed)
-    if args.limit and args.limit < len(primary_files):
-        by_verdict: dict[str, list[Path]] = {}
-        for f in primary_files:
-            try:
-                v = json.loads(f.read_text(encoding="utf-8")).get("completeness", "ERR")
-            except Exception:
-                v = "ERR"
-            by_verdict.setdefault(v, []).append(f)
+    if args.limit and args.limit < len(primary):
+        # Stratify by primary verdict so the kappa sample isn't dominated by "partial".
+        by_verdict: dict[str, list[tuple[Path, dict]]] = {}
+        for item in primary:
+            by_verdict.setdefault(item[1].get("completeness", "ERR"), []).append(item)
         per_bucket = max(1, args.limit // max(1, len(by_verdict)))
-        chosen: list[Path] = []
-        for v, files in by_verdict.items():
+        chosen: list[tuple[Path, dict]] = []
+        for files in by_verdict.values():
             rng.shuffle(files)
             chosen.extend(files[:per_bucket])
-        primary_files = chosen[: args.limit]
+        primary = chosen[: args.limit]
 
     n_done = n_skipped = n_err = 0
-    for pf in primary_files:
-        prim = json.loads(pf.read_text(encoding="utf-8"))
+    for _, prim in primary:
         prompt_id = prim["prompt_id"]
         responder_model = prim["model"]
         mg = prim["moyan_group"]
@@ -82,14 +81,15 @@ def cmd_judge2(args):
         moyan = load_response(args.run_id, prompt_id, mg, seed)
         if not baseline or not moyan or baseline.get("error") or moyan.get("error"):
             continue
-        prompt = prompts[prompt_id]
-        question = prompt.get("prompt") or " | ".join(prompt.get("turns", []))
+        prompt = prompts.get(prompt_id)
+        if not prompt:
+            continue
 
         try:
             judgment = judge_pair(
                 client=client,
                 judge_model=args.judge_model,
-                question=question,
+                question=prompt_question(prompt),
                 baseline_resp=baseline["response"],
                 moyan_resp=moyan["response"],
                 rng=rng,
@@ -97,6 +97,8 @@ def cmd_judge2(args):
         except Exception as e:  # noqa: BLE001
             judgment = {"error": f"{type(e).__name__}: {e}"}
             n_err += 1
+        else:
+            n_done += 1
 
         judgment["prompt_id"] = prompt_id
         judgment["model"] = responder_model
@@ -104,7 +106,6 @@ def cmd_judge2(args):
         judgment["seed"] = seed
         judgment["_judge_model"] = args.judge_model
         outp.write_text(json.dumps(judgment, ensure_ascii=False, indent=2), encoding="utf-8")
-        n_done += 1
         print(f"  {prompt_id:32} {mg:18} seed={seed} → {judgment.get('completeness', 'ERR')}")
 
     print(f"\ndone. judged={n_done} skipped={n_skipped} errors={n_err}")
@@ -142,14 +143,12 @@ def cmd_score(args):
     if n == 0:
         raise SystemExit("no matched pairs")
 
-    # Confusion matrix
     idx = {l: i for i, l in enumerate(LABELS)}
     k = len(LABELS)
     cm = [[0] * k for _ in range(k)]
     for la, lb in pairs:
         cm[idx[la]][idx[lb]] += 1
 
-    # Observed agreement and chance agreement (Cohen κ).
     p_o = sum(cm[i][i] for i in range(k)) / n
     row_tot = [sum(cm[i]) for i in range(k)]
     col_tot = [sum(cm[i][j] for i in range(k)) for j in range(k)]
@@ -200,7 +199,6 @@ def main():
     j2.add_argument("--run-id", required=True)
     j2.add_argument("--judge-model", required=True,
                     help="e.g. claude-sonnet-4-6 (should differ from primary)")
-    j2.add_argument("--moyan-groups", default=",".join(MOYAN_GROUPS))
     j2.add_argument("--limit", type=int, default=0,
                     help="stratified-by-primary-verdict sample; 0 = judge every primary pair")
     j2.add_argument("--rng-seed", type=int, default=7)
