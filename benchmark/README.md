@@ -1,122 +1,130 @@
-# moyan benchmark
+# moyan benchmark + autoskill
 
-衡量 `moyan` 插件究竟能减少多少 Claude 输出 token，以及在**哪些真实开发场景**下有效、哪些场景反而丢信息。
+Two layered jobs:
 
-## 设计原则
+1. **Benchmark** — measure how much `moyan` saves vs Chinese-normal baseline, on 52 paired prompts. Run once to establish numbers (`v0` baseline).
+2. **Autoskill loop** — autonomously iterate on `skills/moyan/SKILL.md` to push the score higher. Pattern from [karpathy/autoresearch](https://github.com/karpathy/autoresearch): the **agent is the loop**. No Python orchestrator.
 
-1. **基线是"中文 normal"，不是英文。** 对比 `D_moyan_jing` vs `B_zh_normal`，隔离"讲中文"和"莫言"两个效应。
-2. **从玩具到真实。** 4 层场景（L1 玩具 / L2 常见 / L3 真实代码 + trace / L4 长程 commit+review+破坏性操作）。
-3. **配对统计。** 每个 prompt 在所有组下都跑，Δ 按 prompt 配对算，用 Wilcoxon + 95% bootstrap CI。
-4. **质量护栏。** 第二个 Claude 盲评技术完整度；Δ 不与质量挂钩就是假胜利。
-5. **Trace 全留。** 每次调用的输入/输出/usage/分析落盘 JSON，为后续 SKILL.md 优化铺路。
+## File map (autoresearch shape)
 
-## 5 个对照组
-
-| 代号 | 含义 | 系统 prompt |
+| File | Role | autoresearch analog |
 |---|---|---|
-| `A_en_normal` | 英文 normal（参考） | `You are Claude, a helpful coding assistant.` |
-| **`B_zh_normal`** | **中文 normal（主基线）** | 同上 + "Reply in Chinese" |
-| `C_moyan_jian` | 莫言 简 | SKILL.md 全文 + `[当前级别 简]` |
-| `D_moyan_jing` | 莫言 精（默认） | 同上，级别 精 |
-| `E_moyan_wenyan` | 莫言 文言文 | 同上，级别 文言文 |
+| `program.md` | Agent loop instructions | `program.md` |
+| `evaluate.py` | Read-only scalar metric (prints `score: …`) | `prepare.py` (`evaluate_bpb`) |
+| `results.tsv` | 5-col log: `commit  delta_median  completeness  status  description` | `results.tsv` |
+| `skills/moyan/SKILL.md` | Artifact under optimization | `train.py` |
+| `run.py` / `judge.py` / `lib.py` | Bench infra (called by `evaluate.py`) | trainer infra |
+| `prompts.jsonl`, `splits/` | Eval set + train/holdout split | data |
 
-## Prompt 集（52 条）
-
-| 类别 | 数量 | 期望行为 |
-|---|---|---|
-| `explain`（L1） | 8 | 省字 |
-| `debug`（L2/L3） | 20 | 省字 |
-| `howto`（L2） | 6 | 省字 |
-| `review`（L4） | 4 | 省字，一行一条 |
-| `commit`（L4） | 4 | **不套级别**，遵 Conventional Commits |
-| `codegen`（L1/L2/L3） | 5 | **代码块不压缩**（guard check） |
-| `destructive`（L4） | 2 | **触发 Auto-Clarity**（出现「警告」） |
-| `multiturn`（L2/L3） | 3 | 测"持续生效" |
-
-## 使用
+## Setup
 
 ```bash
-# 1. 装依赖
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
-
-# 2. 冒烟（5 prompt × 2 组 × 1 seed ≈ $0.02）
-python run.py --run-id smoke --groups B_zh_normal,D_moyan_jing --limit 5 --samples 1
-
-# 3. 精简（30 prompt × 5 组 × 2 seed，单模型 ≈ $3–5）
-python run.py --run-id v1 --models claude-sonnet-4-6 --limit 30 --samples 2
-python judge.py --run-id v1
-python analyze.py --run-id v1
-python attribute.py --run-id v1
-
-# 4. 全量（52 prompt × 5 组 × 3 seed × 2 模型 ≈ $40–60）
-python run.py --run-id full --models claude-opus-4-7,claude-sonnet-4-6 --samples 3
-python judge.py --run-id full --judge-model claude-sonnet-4-6
-python analyze.py --run-id full
-python attribute.py --run-id full
 ```
 
-## 产出
+## 1. Establish baseline (one-shot, ~$3-5)
 
-每次 `--run-id` 得到：
+The autoskill loop needs a precomputed `B_zh_normal` baseline to compare against on every iteration. Bake it once.
 
-```
-traces/{run_id}/
-  {prompt_id}__{group}__seed{n}[_t{turn}].json   # 原始 trace
-  _judgments/*.json                              # 盲评结果
-
-results/{run_id}/
-  metrics.csv                 # 每条 trace 一行
-  per_prompt.csv              # 配对：baseline vs 每个 moyan 组
-  summary.csv                 # 按 (model, group)
-  by_layer.csv                # 按 (model, group, layer)
-  by_category.csv             # 按 (model, group, category)
-  guard_findings.csv          # 边界行为违规（代码被压、警告缺失）
-  report.md                   # 人读报告
-  attribution.md              # 短语归因 + 回归候选
+```bash
+# Full 52-prompt baseline — both groups so we have D_moyan_jing starting point too
+python run.py --run-id v0 \
+  --groups B_zh_normal,D_moyan_jing \
+  --models claude-sonnet-4-5 \
+  --samples 1
 ```
 
-## Trace schema（节选）
+Traces land in `traces/v0/`. The autoskill loop reads `B_zh_normal` traces from this dir on every score computation.
+
+## 2. Sanity-check `evaluate.py`
+
+```bash
+python evaluate.py --run-id v0 --baseline v0 --skip-bench
+# Expected output:
+#   score: 0.XX
+#   delta_median: 0.XX
+#   ...
+#   status: ok
+```
+
+## 3. Run the autoskill loop
+
+There is **no orchestrator script**. Open a Claude Code session with this repo as cwd and feed the agent `benchmark/program.md`:
+
+```bash
+# In Claude Code:
+> Read benchmark/program.md and run the autoskill loop for 25 iterations.
+```
+
+The agent does everything itself: reads state, edits `SKILL.md`, commits, runs `evaluate.py`, parses score, decides keep/revert via `git reset --hard`, appends a row to `results.tsv`. See `program.md` for the full spec.
+
+To manually probe one iteration:
+
+```bash
+# Edit SKILL.md however you like, commit, then:
+python evaluate.py --run-id manual_test --baseline v0
+# (or with judge — adds ~$0.10:)
+python evaluate.py --run-id manual_test --baseline v0 --with-judge
+```
+
+## 4. Holdout check
+
+The loop runs on `splits/train.txt` (39 prompts). Periodic holdout eval (`splits/holdout.txt`, 13 prompts) catches train-overfit:
+
+```bash
+python evaluate.py --run-id holdout_check --baseline v0 --split holdout --with-judge
+```
+
+If holdout `delta_median` lags train by >10pp, the loop is overfitting → revert.
+
+## Score formula
+
+```
+score = delta_median  −  0.5 × max(0, 0.70 − completeness_full)  −  0.2 × guard_fails
+```
+
+- `delta_median`: paired output-token reduction vs B baseline (median across train prompts)
+- `completeness_full`: fraction of judge ratings = "full" (only when `--with-judge`)
+- `guard_fails`: destructive prompts missing 警告; codegen prompts missing code blocks
+
+Threshold 0.70 (not 0.95) — pair-compare judge over-flags legitimate compression as "missing"; 0.70 calibrated against ~50 hand-checked judgments. See top-level `RESULTS.md`.
+
+## What got removed
+
+The first iteration had a Python orchestrator (`autoskill.py`, ~580 lines) plus a proposer system prompt (`AUTOSKILL.md`), plus rich aggregation (`analyze.py`, `attribute.py`). All gone — autoresearch's 4-file shape doesn't include them. The agent's tool freedom in `program.md` covers everything those scripts used to do, and any reporting can be regenerated from `traces/` on demand.
+
+Recover any of them from git:
+
+```bash
+git show d63d923:benchmark/autoskill.py > /tmp/autoskill_v1.py
+```
+
+## Trace schema (unchanged)
 
 ```json
 {
   "prompt_id": "L2-debug-01-useeffect-loop",
   "group": "D_moyan_jing",
-  "model": "claude-sonnet-4-6",
+  "model": "claude-sonnet-4-5",
   "seed": 0,
-  "usage": { "input_tokens": 1823, "cache_read_input_tokens": 1750, "output_tokens": 412 },
+  "usage": { "input_tokens": 1823, "output_tokens": 412, ... },
   "analysis": {
     "char_count": 380,
     "code_block_chars": 120,
-    "non_code_chars": 260,
-    "filler_hits": { "客套": 0, "填词": 1, "铺垫": 0, "犹豫": 2, "自指": 0 },
+    "filler_hits": { "客套": 0, "填词": 1, ... },
     "contains_warning": false,
-    "script_simplified_ratio": 1.0
+    ...
   },
   "response": "...",
-  "system_prompt": "...",
-  "turns": [...]
+  "system_prompt": "..."
 }
 ```
 
-## 统计方法
+## Known limitations
 
-- **配对 Δ**：`delta_out = 1 - moyan_out / baseline_out`，按 (prompt, model, moyan_group) 配对
-- **区间**：95% bootstrap CI（1000 次重抽样）
-- **显著性**：Wilcoxon signed-rank（非参、配对，H1: Δ > 0）
-- **分层**：(model × group × layer)、(model × group × category) 独立报告
-
-## 已知局限
-
-- SKILL.md 注入吃 ~2k input token；只有 prompt caching 命中时才真省（长会话更划算）
-- LLM-as-judge 有系统性偏差——建议抽 20% 人工复核
-- `temperature=0` 不等于确定性；用 `--samples 3` 取均值
-- L4 多轮场景只有 3 个——想要真实长程结论需要扩展
-- 只测 API 直连；未测 Claude Code CLI 内 skill 加载路径（集成测试是 v2）
-
-## 下一步（v2）
-
-- [ ] 接入 Claude Code / Agent SDK 作集成测试层
-- [ ] 扩展 multi-turn 到 10 条真对话
-- [ ] 人工复核 20% judgments，算 Cohen's κ
-- [ ] 成本-收益曲线：Δ × 调用量 × 价格 → 实际月省多少
+- SKILL.md injection costs ~2k input tokens; only really saves with prompt caching (long sessions)
+- LLM-as-judge has systematic verbosity bias — `completeness_full=0.70` is calibrated for that
+- `temperature=0` ≠ deterministic; `--samples 1` accepts that single-seed noise
+- Multi-turn coverage is thin (3 prompts) — long-conversation effects are under-measured
+- Holdout n=13; CIs are wide
