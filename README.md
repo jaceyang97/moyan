@@ -9,6 +9,16 @@
 - **简繁通吃**：自动跟随用户输入，或手动切换
 - **Claude Code only**（目前）
 
+## 究竟省多少？
+
+在 52 条编程问答（概念解释 / 调试 / 代码审查 / commit / 多轮对话等）上测 `claude-sonnet-4-5`：
+
+- **output token 中位数降 54% / 均值降 59%**（holdout 13 条）
+- **0 条判官认定为技术信息丢失**
+- commit / review / auto-clarity 等边界行为全守住
+
+详见 [`benchmark/RESULTS.md`](benchmark/RESULTS.md)。benchmark 可复现（52 条 prompt + run/judge/analyze 脚本全在 `benchmark/`）。
+
 ## 看一眼差别
 
 输入：「为什么我这条 SQL 查询越来越慢？」
@@ -90,11 +100,17 @@ moyan/
 │   └── marketplace.json
 ├── skills/
 │   └── moyan/SKILL.md
+├── benchmark/
+│   ├── RESULTS.md           # 当前版本的 benchmark 数字
+│   ├── AUTOSKILL.md         # 自动优化 proposer 的 system prompt
+│   ├── prompts.jsonl        # 52 条测试集
+│   ├── splits/              # train/holdout 分割
+│   └── *.py                 # run / judge / analyze / autoskill
 ├── README.md
 └── LICENSE
 ```
 
-就这些。一个 SKILL.md 装下全部行为。无脚本、无依赖、无 hooks。
+核心插件部分（`.claude-plugin/` + `skills/`）无脚本、无依赖、无 hooks——一个 SKILL.md 装下全部行为。`benchmark/` 是开发过程工具，不影响插件使用。
 
 ## 致谢 / 缘起
 
