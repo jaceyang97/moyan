@@ -12,6 +12,11 @@ opening 71 JSON files.
 | `v2-haiku-v21` | Haiku 4.5 | v2.1 | all (71) | Opus 4.6 | Track C iter — v2.1 trim |
 | `v2-haiku-v22` | Haiku 4.5 | v2.2 | all (71) | Opus 4.6 | Track C — level collapse persists on Haiku |
 | `v2-sonnet-v22` | Sonnet 4.6 | v2.2 | holdout | Opus 4.6 | Track C — current best (74.5% 文言文 Δ_median) |
+| `sonnet-baseline` | Sonnet 4.6 | n/a | all (71) | — | `B_zh_normal` baseline for autoskill iters |
+| `probe_v22_a` / `_b` | Sonnet 4.6 | v2.2 | train | Opus 4.7 | autoskill probe — establishes BEST=0.6718 |
+| `iter_004_a` / `_b` | Sonnet 4.6 | v2.2+填词 | train | — | autoskill iter 4 — discarded (−0.09pp noise) |
+| `iter_005_a` / `_b` | Sonnet 4.6 | v2.2+版式 | train | Opus 4.7 (a) | autoskill iter 5 — **KEEP**, train 0.6948 |
+| `holdout_005` | Sonnet 4.6 | v2.2+版式 | holdout | Opus 4.7 | iter 5 holdout — 0.7237 (+5.2pp) |
 
 `.meta.json` holds the authoritative version of the above plus SKILL.md commit,
 byte length, sample count, and created_at. Always read `.meta.json` before
