@@ -4,4 +4,5 @@ __pycache__/
 .venv/
 venv/
 benchmark/traces/
+benchmark/results/
 .DS_Store

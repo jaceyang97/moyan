@@ -21,6 +21,12 @@
 
 文言文在最难压缩的类目（debug / explain / howto）反超精 8-12pp —— 文言文不是审美点缀，是真正的高压缩模式。详见 [`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)（v1 历史快照在 [`RESULTS.md`](benchmark/RESULTS.md)）。
 
+## 一图看进展
+
+![moyan token-compression progression](docs/progression.png)
+
+从最初基础规则的 52.7%，经过手写 + autoskill 多轮迭代到 v1 终态 61%，再叠加 Sonnet 4.6 模型升级（+4.8pp）和切换文言文级别（+4.8pp），最终落在 **70.6%**。autoskill v2 四轮全 discard 证实当前 SKILL.md 在 Sonnet 4.6 上已达局部最优；进一步收益来自模型升级与级别切换，而非新规则。重现：`pip install matplotlib && python benchmark/plot.py`。
+
 ## 看一眼差别
 
 输入：「为什么我这条 SQL 查询越来越慢？」
