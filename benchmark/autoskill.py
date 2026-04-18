@@ -413,6 +413,17 @@ def main():
     history = load_tsv()
     best_score = max((h["score"] for h in history), default=-1.0)
 
+    # Resume orphan: if HEAD is "autoskill <tag> iter N" but TSV has no row N,
+    # the harness was killed mid-iter. Just reset HEAD^ so the SKILL.md is
+    # clean. The wasted traces remain for debug but don't contaminate scoring.
+    head_msg = git("log", "-1", "--pretty=%s").strip()
+    existing_iters = {h["iter"] for h in history}
+    m = re.match(rf"autoskill {re.escape(args.tag)} iter (\d+): ", head_msg)
+    if m and int(m.group(1)) not in existing_iters:
+        orphan_iter = int(m.group(1))
+        print(f"!! orphan detected: HEAD is iter {orphan_iter} but no TSV row. Reverting.", flush=True)
+        git_revert_to(f"HEAD^")
+
     for i in range(len(history), len(history) + args.max_iters):
         print(f"\n{'='*60}\nautoskill iter {i} · best_score={best_score:.3f}  ({time.strftime('%H:%M:%S')})\n{'='*60}", flush=True)
         parent_sha = git_head()
