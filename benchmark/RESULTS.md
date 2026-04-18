@@ -1,4 +1,8 @@
-# benchmark 结果
+# benchmark 结果（v1 历史快照）
+
+> 本文档是 **autoskill v1** 跑完后的冻结结果（Python 编排器时代，commit `d63d923` 及之前）。
+> v2 起改为 autoresearch 形态（agent-as-loop），实时日志在 `results.tsv`，每轮一行。
+> v2 跑出新数字后再写新文档。本文留作 v1 基准参考。
 
 ## TL;DR
 

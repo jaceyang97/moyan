@@ -1,9 +1,8 @@
-"""Run the benchmark: for each (prompt × group × seed), call the API,
-analyze the response, save a trace.
+"""Run the benchmark: for each (prompt × group × seed), call the API and save a trace.
 
 Usage:
-  python run.py --run-id smoke --models claude-sonnet-4-6 --groups B_zh_normal,D_moyan_jing --limit 5 --samples 1
-  python run.py --run-id full  --models claude-opus-4-7,claude-sonnet-4-6 --samples 3
+  python run.py --run-id smoke --groups B_zh_normal,D_moyan_jing --limit 5
+  python run.py --run-id v0    --groups B_zh_normal,D_moyan_jing --samples 1
 """
 from __future__ import annotations
 
@@ -11,11 +10,13 @@ import argparse
 import json
 import sys
 import time
-from pathlib import Path  # noqa: F401 (used below)
+from pathlib import Path
 
 from lib import (
     GROUPS,
+    Analysis,
     Trace,
+    Usage,
     analyze_response,
     call_claude,
     get_client,
@@ -23,20 +24,6 @@ from lib import (
     save_trace,
     trace_path,
 )
-
-
-def build_turns(prompt_entry: dict, group: str) -> list[list[dict]]:
-    """Return a list of turn sequences. For single-turn prompts, returns
-    [[user]]. For multi-turn, returns [[u1], [u1, a1, u2], [u1, a1, u2, a2, u3], ...]
-    — i.e. one API call per user turn, carrying prior assistant replies."""
-    if "turns" in prompt_entry:
-        user_turns = prompt_entry["turns"]
-    else:
-        user_turns = [prompt_entry["prompt"]]
-    # For A (English baseline), translate the "reply in Chinese" expectation
-    # is carried by system prompt; user text stays as-is so we test the same
-    # question. The English group just doesn't get told to reply in Chinese.
-    return [[{"role": "user", "content": t}] for t in user_turns]
 
 
 def run_one(
@@ -96,8 +83,8 @@ def run_one(
             system_prompt=system_prompt,
             turns=history.copy(),
             response=text,
-            usage=usage if usage else __import__("lib").Usage(),
-            analysis=analysis if analysis else __import__("lib").Analysis(),
+            usage=usage or Usage(),
+            analysis=analysis or Analysis(),
             error=err,
         )
         save_trace(run_id, trace, turn=turn_idx)
@@ -115,7 +102,7 @@ def run_one(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True, help="identifier for this run (e.g. smoke, v1)")
-    ap.add_argument("--models", default="claude-sonnet-4-6",
+    ap.add_argument("--models", default="claude-sonnet-4-5",
                     help="comma-separated model IDs")
     ap.add_argument("--groups", default=",".join(GROUPS.keys()),
                     help="comma-separated group IDs")

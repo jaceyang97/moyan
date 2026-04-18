@@ -101,16 +101,19 @@ moyan/
 ├── skills/
 │   └── moyan/SKILL.md
 ├── benchmark/
-│   ├── RESULTS.md           # 当前版本的 benchmark 数字
-│   ├── AUTOSKILL.md         # 自动优化 proposer 的 system prompt
+│   ├── program.md           # autoskill agent loop（agent 读这个，自己跑迭代）
+│   ├── evaluate.py          # 单标量指标，print `score: …`
+│   ├── results.tsv          # 实时迭代日志（commit / train / holdout / status / desc）
+│   ├── RESULTS.md           # v1 历史结果
 │   ├── prompts.jsonl        # 52 条测试集
-│   ├── splits/              # train/holdout 分割
-│   └── *.py                 # run / judge / analyze / autoskill
+│   ├── splits/              # train / holdout 分割
+│   ├── run.py · judge.py · lib.py  # 评测基础设施
+│   └── README.md            # quickstart + 4-file 说明
 ├── README.md
 └── LICENSE
 ```
 
-核心插件部分（`.claude-plugin/` + `skills/`）无脚本、无依赖、无 hooks——一个 SKILL.md 装下全部行为。`benchmark/` 是开发过程工具，不影响插件使用。
+核心插件部分（`.claude-plugin/` + `skills/`）无脚本、无依赖、无 hooks——一个 SKILL.md 装下全部行为。`benchmark/` 是开发过程工具（[autoresearch](https://github.com/karpathy/autoresearch) 形态的自我迭代循环），不影响插件使用。开发者从 `benchmark/program.md` 入手。
 
 ## 致谢 / 缘起
 

@@ -1,8 +1,4 @@
-"""Shared utilities for the moyan benchmark.
-
-Defines the 5 experimental groups, their system prompts, trace schema,
-and text-analysis helpers used by run.py / judge.py / analyze.py.
-"""
+"""Shared infra: experimental groups, system prompts, trace schema, API client."""
 from __future__ import annotations
 
 import json
@@ -19,8 +15,7 @@ BENCH_ROOT = Path(__file__).resolve().parent
 
 
 def load_skill_body() -> str:
-    """Load SKILL.md, strip YAML frontmatter — frontmatter is for plugin loader,
-    not model instructions. The body is what Claude Code surfaces as a skill."""
+    """SKILL.md without YAML frontmatter — frontmatter is plugin metadata, not model input."""
     text = SKILL_PATH.read_text(encoding="utf-8")
     if text.startswith("---"):
         _, _, rest = text.partition("\n---\n")
@@ -28,9 +23,8 @@ def load_skill_body() -> str:
     return text.strip()
 
 
-# ---------- Groups ----------
 # 5 groups. B (Chinese normal) is the primary baseline — moyan savings
-# must be measured vs B, not vs A, to isolate the effect from "just use Chinese".
+# must be measured vs B, not A, to isolate the "莫言" effect from "use Chinese".
 
 SKILL_BODY = load_skill_body()
 
@@ -39,10 +33,7 @@ BASELINE_EN = "You are Claude, a helpful coding assistant."
 
 
 def moyan_system(level: str) -> str:
-    """System prompt injecting the full SKILL.md body + activation state.
-
-    level: 简 / 精 / 文言文
-    """
+    """level: 简 / 精 / 文言文"""
     return (
         "You are Claude, a helpful coding assistant. The following skill is active "
         "for this session:\n\n"
@@ -86,7 +77,6 @@ GROUPS: dict[str, dict[str, Any]] = {
     },
 }
 
-# Pair each moyan group against B for Δ computation.
 BASELINE_GROUP = "B_zh_normal"
 MOYAN_GROUPS = ["C_moyan_jian", "D_moyan_jing", "E_moyan_wenyan"]
 
@@ -103,14 +93,8 @@ class Usage:
 
 @dataclass
 class Analysis:
-    char_count: int = 0
-    code_block_chars: int = 0
-    non_code_chars: int = 0
     has_code_block: bool = False
     filler_hits: dict[str, int] = field(default_factory=dict)
-    hedging_count: int = 0
-    script_simplified_ratio: float = 0.0
-    starts_with_pleasantry: bool = False
     contains_warning: bool = False
 
 
@@ -125,20 +109,20 @@ class Trace:
     timestamp: float
     latency_ms: int
     system_prompt: str
-    turns: list[dict]          # list of {role, content}
+    turns: list[dict]
     response: str
     usage: Usage
     analysis: Analysis
     error: str | None = None
 
     def to_dict(self) -> dict:
-        d = asdict(self)
-        return d
+        return asdict(self)
 
 
 # ---------- Text analysis ----------
 
-# Phrases the skill says to strip, by category.
+# Filler phrases the skill says to strip. Counted in non-code text only,
+# surfaced in trace JSON to help the agent spot regressions.
 FILLER_PATTERNS: dict[str, list[str]] = {
     "客套": ["好的", "当然可以", "没问题", "乐意帮您", "很高兴", "希望这能帮到您"],
     "填词": ["其实", "基本上", "实际上", "就是说", "也就是说"],
@@ -147,43 +131,18 @@ FILLER_PATTERNS: dict[str, list[str]] = {
     "自指": ["我注意到", "我看到", "我觉得", "在我看来"],
 }
 
-PLEASANTRY_STARTS = [
-    "好的", "当然", "没问题", "没有问题", "很高兴", "乐意", "明白了",
-    "Of course", "Sure", "Certainly", "I'd be happy",
-]
-
 WARNING_MARKERS = ["警告", "⚠", "注意：", "不可逆", "永久", "DANGER", "WARNING"]
 
-CODE_FENCE = re.compile(r"```.*?```", re.DOTALL)
-
-# Traditional-only characters (approximation — matches common TW/HK-exclusive forms)
-TRAD_ONLY = set("繁體學習國產網絡電腦開關讀書寫畫圖書館話語發達個這裡時間")
-SIMP_ONLY = set("简体学习国产网络电脑开关读书写画图书馆话语发达个这里时间")
+_CODE_FENCE = re.compile(r"```.*?```", re.DOTALL)
 
 
 def analyze_response(text: str) -> Analysis:
-    """Extract structural + lexical stats from a response."""
     a = Analysis()
-    a.char_count = len(text)
-    code_spans = CODE_FENCE.findall(text)
-    a.has_code_block = bool(code_spans)
-    a.code_block_chars = sum(len(s) for s in code_spans)
-    a.non_code_chars = a.char_count - a.code_block_chars
-
-    non_code_text = CODE_FENCE.sub("", text)
-    a.filler_hits = {}
-    for cat, phrases in FILLER_PATTERNS.items():
-        a.filler_hits[cat] = sum(non_code_text.count(p) for p in phrases)
-    a.hedging_count = a.filler_hits.get("犹豫", 0) + a.filler_hits.get("自指", 0)
-
-    stripped = text.lstrip()
-    a.starts_with_pleasantry = any(stripped.startswith(p) for p in PLEASANTRY_STARTS)
+    a.has_code_block = "```" in text
+    non_code = _CODE_FENCE.sub("", text)
+    a.filler_hits = {cat: sum(non_code.count(p) for p in phrases)
+                     for cat, phrases in FILLER_PATTERNS.items()}
     a.contains_warning = any(m in text for m in WARNING_MARKERS)
-
-    simp = sum(1 for c in text if c in SIMP_ONLY)
-    trad = sum(1 for c in text if c in TRAD_ONLY)
-    total_cn = simp + trad
-    a.script_simplified_ratio = simp / total_cn if total_cn else 1.0
     return a
 
 
@@ -198,16 +157,9 @@ def trace_path(run_id: str, prompt_id: str, group: str, seed: int, turn: int = 0
 
 def save_trace(run_id: str, trace: Trace, turn: int = 0) -> Path:
     p = trace_path(run_id, trace.prompt_id, trace.group, trace.seed, turn)
-    p.write_text(json.dumps(trace.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    p.write_text(json.dumps(trace.to_dict(), ensure_ascii=False, indent=2),
+                 encoding="utf-8")
     return p
-
-
-def load_traces(run_id: str) -> list[dict]:
-    d = BENCH_ROOT / "traces" / run_id
-    out = []
-    for p in sorted(d.glob("*.json")):
-        out.append(json.loads(p.read_text(encoding="utf-8")))
-    return out
 
 
 def load_prompts() -> list[dict]:
@@ -225,18 +177,10 @@ def call_claude(
     turns: list[dict],
     max_tokens: int = 2048,
     temperature: float = 0.0,
-    use_cache: bool = True,
 ) -> tuple[str, Usage, int]:
-    """Single API call. Returns (text, usage, latency_ms).
-
-    use_cache: marks system_prompt with cache_control: ephemeral so repeated
-    runs with the same system share a cache entry.
-    """
-    system = (
-        [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
-        if use_cache
-        else system_prompt
-    )
+    """Returns (text, usage, latency_ms). System prompt is cached (ephemeral)."""
+    system = [{"type": "text", "text": system_prompt,
+               "cache_control": {"type": "ephemeral"}}]
     t0 = time.time()
     resp = client.messages.create(
         model=model,

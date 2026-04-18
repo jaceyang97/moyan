@@ -1,37 +1,19 @@
-"""evaluate.py — scalar metric for the autoskill loop.
+"""Scalar metric for the autoskill loop. Analog of autoresearch/prepare.py.
 
-Analog of autoresearch/prepare.py: read-only from the agent's perspective.
-Takes the current SKILL.md (whatever is on disk), runs D_moyan_jing on the
-train split, compares against a precomputed B_zh_normal baseline, and prints
-one scalar `score` plus diagnostics. The agent greps `^score:` and decides
-keep-or-revert.
-
-Output (stdout, grep-friendly — autoresearch convention):
-    score: 0.612
-    delta_median: 0.612
-    delta_mean: 0.598
-    n_paired: 39
-    completeness_full: 0.564     (or `skipped`)
-    guard_fails: 0
-    status: ok                    (or `fail:<reason>`)
-
-Usage:
-    python evaluate.py --run-id iter_5 --baseline v0
-    python evaluate.py --run-id iter_5 --baseline v0 --with-judge --judge-n 10
-    python evaluate.py --run-id iter_5 --baseline v0 --split holdout
+Runs D_moyan_jing on a split, compares to precomputed B_zh_normal baseline,
+prints `score: <float>` (grep-friendly). Agent reads stdout to decide keep/revert.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import random
+import statistics
 import subprocess
 import sys
 import time
 from collections import Counter
 from pathlib import Path
-
-import numpy as np
 
 from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts
 
@@ -216,8 +198,8 @@ def main():
         print("status: fail:no-paired-prompts")
         sys.exit(1)
 
-    delta_median = float(np.median(deltas))
-    delta_mean = float(np.mean(deltas))
+    delta_median = statistics.median(deltas)
+    delta_mean = statistics.mean(deltas)
     gfails = guard_fails(args.run_id)
 
     completeness: float | None = None

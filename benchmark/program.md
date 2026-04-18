@@ -33,6 +33,8 @@ For each iteration `N` (start from `cat benchmark/results.tsv | wc -l`):
 PARENT=$(git rev-parse HEAD)
 BEST=$(awk -F'\t' 'NR>1 && $4=="keep" {print $2}' benchmark/results.tsv | sort -g | tail -1)
 BEST=${BEST:-0.0}
+BEST_HOLDOUT=$(awk -F'\t' 'NR>1 && $4=="keep" && $3!="" && $3!="skip" {print $3}' benchmark/results.tsv | sort -g | tail -1)
+BEST_HOLDOUT=${BEST_HOLDOUT:-0.0}
 ```
 
 1. **Read state**
@@ -41,7 +43,7 @@ BEST=${BEST:-0.0}
    - `cat benchmark/traces/v0/_judgments/*.json | head -200` — last judge feedback (if any)
    - Look at the worst-Δ prompts in baseline: find ids in `benchmark/traces/v0` where `D_moyan_jing` saved least vs `B_zh_normal`. Read both responses. That's your weakness signal.
 
-2. **Form ONE small hypothesis** (one rule added, one phrase tightened, one example swapped). Single-edit attribution > big rewrites. Look at `results.tsv` `description` column — don't repeat anything that was `discard`ed unless you have new evidence.
+2. **Draft 3 candidate hypotheses internally; pick the most promising.** Diversity guard: skip any candidate that closely resembles the last 5 `discard`ed descriptions in `results.tsv`. Pick by: (a) targets a different weakness than the last 2 keeps, (b) is the smallest edit that could plausibly move the metric, (c) hasn't been tried. Output: ONE hypothesis, one edit. Single-edit attribution > big rewrites.
 
 3. **Edit `skills/moyan/SKILL.md`** with the Edit tool. Touch nothing else.
 
@@ -53,34 +55,50 @@ BEST=${BEST:-0.0}
    git commit -m "autoskill iter N: <≤20-char hypothesis>"
    ```
 
-6. **Evaluate**:
+6. **Evaluate on train (n=2 seeds, averaged)** — single-seed noise was a real failure mode in v1:
    ```bash
-   RUN_ID="iter_$(printf %03d N)"
-   python benchmark/evaluate.py --run-id "$RUN_ID" --baseline v0 > /tmp/eval.log 2>&1
-   # Run judge every 3 iters (cheap signal vs $0.10 cost):
+   N_PADDED=$(printf %03d $N)
+   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline v0 > /tmp/eval_a.log 2>&1
+   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_b" --baseline v0 > /tmp/eval_b.log 2>&1
+   SCORE_A=$(grep '^score: ' /tmp/eval_a.log | tail -1 | awk '{print $2}')
+   SCORE_B=$(grep '^score: ' /tmp/eval_b.log | tail -1 | awk '{print $2}')
+   SCORE_TRAIN=$(awk "BEGIN { print ($SCORE_A + $SCORE_B) / 2 }")
+
+   # Judge every 3 iters (~$0.10), only on the -a run for cost:
    if (( N % 3 == 0 )); then
-     python benchmark/evaluate.py --run-id "$RUN_ID" --baseline v0 --with-judge --skip-bench >> /tmp/eval.log 2>&1
+     python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline v0 --with-judge --skip-bench >> /tmp/eval_a.log 2>&1
    fi
-   tail -20 /tmp/eval.log
    ```
 
-7. **Parse**: `SCORE=$(grep '^score: ' /tmp/eval.log | tail -1 | awk '{print $2}')`
+7. **Holdout gate** — only when train score looks like a keep (`SCORE_TRAIN > BEST + 0.02`):
+   ```bash
+   if awk "BEGIN { exit !($SCORE_TRAIN > $BEST + 0.02) }"; then
+     python benchmark/evaluate.py --run-id "holdout_${N_PADDED}" --baseline v0 --split holdout --with-judge > /tmp/eval_h.log 2>&1
+     SCORE_HOLDOUT=$(grep '^score: ' /tmp/eval_h.log | tail -1 | awk '{print $2}')
+   else
+     SCORE_HOLDOUT="skip"
+   fi
+   ```
+   This catches v1-iter-4-style train-overfits where train Δ jumps but completeness collapses.
 
-8. **Decide** (greedy, +0.02 margin):
-   - If `SCORE > BEST + 0.02`: keep. New BEST = SCORE.
-   - Else: `git reset --hard $PARENT`. Status = `discard`.
-   - If `evaluate.py` printed `status: fail:*` or crashed: `git reset --hard $PARENT`. Status = `crash`.
+8. **Decide**:
+   - **Train fails** (`SCORE_TRAIN ≤ BEST + 0.02`): `git reset --hard $PARENT`. Status = `discard`.
+   - **Train passes, holdout drops > 5pp from `BEST_HOLDOUT`**: `git reset --hard $PARENT`. Status = `discard:holdout-overfit`.
+   - **Both pass**: keep. The next iter's `BEST` and `BEST_HOLDOUT` re-read from `results.tsv`.
+   - **Crash / `status: fail:*`**: `git reset --hard $PARENT`. Status = `crash`.
 
 9. **Log** (TAB-separated, append one row):
    ```bash
    COMMIT=$(git rev-parse HEAD)
-   printf "%s\t%s\t%s\t%s\t%s\n" "$COMMIT" "$DELTA" "$COMPLETENESS" "$STATUS" "$DESCRIPTION" \
+   printf "%s\t%s\t%s\t%s\t%s\n" "$COMMIT" "$SCORE_TRAIN" "$SCORE_HOLDOUT" "$STATUS" "$DESCRIPTION" \
      >> benchmark/results.tsv
    ```
-   `results.tsv` columns: `commit  delta_median  completeness  status  description`
-   `status` ∈ `{keep, discard, crash}`. `completeness` may be empty when judge skipped.
+   `results.tsv` columns: `commit  train_score  holdout_score  status  description`
+   - `train_score` = n=2-seed average from step 6 (always present unless crash)
+   - `holdout_score` = step 7 result, or empty when train didn't pass (gate not triggered)
+   - `status` ∈ `{keep, discard, discard:holdout-overfit, crash}`
 
-10. **Holdout check** (every 5 keeps): run `python benchmark/evaluate.py --run-id "holdout_$N" --baseline v0 --split holdout --with-judge`. If holdout `delta_median` lags train by more than 10pp, you're overfitting — next iter, propose a more general rule (something that helps multiple prompt categories, not one).
+10. **Cost note** (per iter, sonnet-4-5): train ~$0.50 (n=2 seeds), holdout when triggered ~$0.10, judge every 3 iters ~$0.10 amortized. Budget ~$0.65/iter. 25 iters ≈ $16.
 
 ## Plateau handling
 
