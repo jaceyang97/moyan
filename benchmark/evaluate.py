@@ -19,14 +19,15 @@ from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts, prompt_que
 
 MOYAN_GROUP = "D_moyan_jing"
 DEFAULT_MODEL = "claude-sonnet-4-6"   # bench respondent — high volume, want speed
-JUDGE_MODEL = "claude-opus-4-6"       # judge — low volume, hard pairwise reasoning
+JUDGE_MODEL = "claude-opus-4-7"       # primary judge; triangulation showed Opus 4.6 was the lenient outlier
 
 # Score formula:
 #   score = delta_median - 0.5 * max(0, COMPLETENESS_TARGET - completeness_full) - 0.2 * guard_fails
-# v1 used 0.70 (Sonnet judge baseline ~0.56). v2 uses 0.40 to match the
-# Opus 4.6 judge's baseline rate of 0.40 — measured on v0 holdout. With
-# a higher target, every iter ate a ~0.15 penalty just for tracking baseline.
-COMPLETENESS_TARGET = 0.40
+# Target tracks the judge's full-rate on current-best SKILL.md so iters are
+# penalized for regressions, not baseline level. Measured 0.315 full rate on
+# v2-sonnet-v22 (SKILL.md v2.2, 54 pairs) — set 0.30 with a small buffer so
+# tiny swings don't fire the penalty.
+COMPLETENESS_TARGET = 0.30
 COMPLETENESS_PENALTY = 0.5
 GUARD_PENALTY = 0.2
 
