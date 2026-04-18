@@ -31,9 +31,12 @@ GUARD_PENALTY = 0.2
 
 
 def run_bench(run_id: str, prompt_file: Path, model: str,
-              max_attempts: int = 3, min_traces: int = 30) -> bool:
+              max_attempts: int = 3) -> bool:
     """Subprocess into run.py for D_moyan_jing on the given prompt list.
-    Retries on partial failure; resumes by dropping --force after attempt 1."""
+    Retries on partial failure; resumes by dropping --force after attempt 1.
+    Completion threshold: 90% of prompts in the split must have traces."""
+    n_prompts = sum(1 for l in prompt_file.read_text().splitlines() if l.strip())
+    min_traces = max(1, int(0.9 * n_prompts))
     cmd = [
         sys.executable, "-u", str(BENCH_ROOT / "run.py"),
         "--run-id", run_id,

@@ -1,1 +1,2 @@
 commit	train_score	holdout_score	status	description
+cf8a11e	0.6589	skip	discard	扩留规则 — 训练+0.11pp，未过阈值
