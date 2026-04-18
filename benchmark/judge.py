@@ -95,13 +95,17 @@ def judge_pair(
 
     user = JUDGE_USER_TEMPLATE.format(question=question, resp_a=resp_a, resp_b=resp_b)
     t0 = time.time()
-    resp = client.messages.create(
+    kwargs = dict(
         model=judge_model,
         system=JUDGE_SYSTEM,
         messages=[{"role": "user", "content": user}],
         max_tokens=1024,
-        temperature=0.0,
     )
+    # Opus 4.7 and later reject `temperature`. Older models default to 1.0 when
+    # omitted, so we only pass temperature=0.0 on the models that still accept it.
+    if "opus-4-7" not in judge_model:
+        kwargs["temperature"] = 0.0
+    resp = client.messages.create(**kwargs)
     latency = int((time.time() - t0) * 1000)
     text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
 

@@ -111,15 +111,23 @@ def cmd_judge2(args):
     print(f"\ndone. judged={n_done} skipped={n_skipped} errors={n_err}")
 
 
+def _judge_dir(run_dir: Path, judge_model: str) -> Path:
+    """Prefer the kappa subdir for this judge; fall back to the primary _judgments/."""
+    safe = judge_model.replace("/", "_")
+    kappa_dir = run_dir / "_judgments_kappa" / safe
+    return kappa_dir if kappa_dir.exists() else run_dir / "_judgments"
+
+
 def cmd_score(args):
     """Compute Cohen's κ (unweighted + linear-weighted) between two judges."""
     run_dir = BENCH_ROOT / "traces" / args.run_id
-    dir_a = run_dir / "_judgments"
-    safe_b = args.judge_b.replace("/", "_")
-    dir_b = run_dir / "_judgments_kappa" / safe_b
+    dir_a = _judge_dir(run_dir, args.judge_a)
+    dir_b = _judge_dir(run_dir, args.judge_b)
 
     if not dir_a.exists() or not dir_b.exists():
-        raise SystemExit(f"missing dirs: a={dir_a.exists()} b={dir_b.exists()}")
+        raise SystemExit(f"missing dirs: a={dir_a} ({dir_a.exists()}) b={dir_b} ({dir_b.exists()})")
+    if dir_a == dir_b:
+        raise SystemExit(f"judge-a and judge-b resolve to same dir {dir_a}")
 
     # Match by filename (same prompt/model/group/seed → same filename).
     pairs: list[tuple[str, str]] = []
