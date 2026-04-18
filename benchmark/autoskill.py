@@ -225,6 +225,8 @@ def run_judge_subset(iter_run_id: str, baseline_run_id: str, n_prompts: int = 10
     iter_traces = {p.stem.split("__")[0]: p
                    for p in (BENCH_ROOT / "traces" / iter_run_id).glob("*__D_moyan_jing__seed0.json")}
 
+    jdir = BENCH_ROOT / "traces" / iter_run_id / "_judgments"
+    jdir.mkdir(parents=True, exist_ok=True)
     for pid in ids:
         if pid not in base_traces or pid not in iter_traces:
             continue
@@ -237,6 +239,8 @@ def run_judge_subset(iter_run_id: str, baseline_run_id: str, n_prompts: int = 10
             j = judge_pair(client=client, judge_model=JUDGE_MODEL,
                            question=q, baseline_resp=base["response"],
                            moyan_resp=moy["response"], rng=rng)
+            j["prompt_id"] = pid
+            (jdir / f"{pid}.json").write_text(json.dumps(j, ensure_ascii=False, indent=2), encoding="utf-8")
             if "completeness" in j:
                 results.append(j["completeness"])
         except Exception as e:  # noqa: BLE001
@@ -248,9 +252,11 @@ def run_judge_subset(iter_run_id: str, baseline_run_id: str, n_prompts: int = 10
 
 def compute_score(delta_median: float, completeness_full: float | None,
                   guard_fails_n: int) -> float:
+    # Threshold 0.70 (not 0.95): pair-compare judge flags baseline verbosity
+    # as "missing", so 40-50% complete often reflects appropriate compression.
     q_penalty = 0.0
     if completeness_full is not None:
-        q_penalty = 0.5 * max(0.0, 0.95 - completeness_full)
+        q_penalty = 0.5 * max(0.0, 0.70 - completeness_full)
     return delta_median - q_penalty - 0.2 * guard_fails_n
 
 
