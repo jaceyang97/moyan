@@ -37,3 +37,17 @@ codegen-03-migration
 destructive-01-rm-rf
 multiturn-02-topic-switch
 multiturn-03-long
+L4-commit-05-docs
+L4-commit-06-perf
+L4-commit-07-chore-dep
+L4-review-05-sql-injection
+L4-review-07-race
+L4-review-09-err-swallow
+L4-review-10-missing-validation
+multiturn-04-debug-iter
+multiturn-05-design
+multiturn-07-sql-iter
+multiturn-08-k8s-trouble
+multiturn-09-perf
+multiturn-10-security
+multiturn-12-refactor

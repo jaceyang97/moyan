@@ -11,3 +11,8 @@ L4-commit-01-feat
 L4-review-01-auth-diff
 destructive-02-drop-table
 multiturn-01-persist
+L4-commit-08-test
+L4-review-06-hardcoded-secret
+L4-review-08-resource-leak
+multiturn-06-learn
+multiturn-11-api-review
