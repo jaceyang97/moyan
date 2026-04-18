@@ -1,33 +1,10 @@
 # 莫言 · moyan
 
-> 少言多意。中文省 token 模式 · Claude Code plugin。
+中文省 token 模式，Claude Code plugin。受 [caveman](https://github.com/JuliusBrussee/caveman) 启发 —— caveman 用山顶洞人式英文压缩输出，moyan 以简洁中文做同件事。
 
-受 [caveman](https://github.com/JuliusBrussee/caveman) 启发。Caveman 以"山顶洞人"的英语省 token，**莫言** 以简洁中文省 token —— 回复少而准，字字算数。
+三档级别（简 / 精 / 文言文）、简繁自适应、Claude Code 原生 skill 加载。
 
-- **白话两档**：简 / 精（默认）
-- **文言文**：最省字，古雅
-- **简繁通吃**：自动跟随用户输入，或手动切换
-- **Claude Code only**（目前）
-
-## 究竟省多少？
-
-在 52 条编程问答（概念解释 / 调试 / 代码审查 / commit / 多轮对话等）上测 `claude-sonnet-4-6`：
-
-| 级别 | 中位 token 节省 | 均值节省 | 适用 |
-|---|---|---|---|
-| 简 | 64% | 63% | 正式文档、对外沟通 |
-| **精**（默认）| **66%** | **67%** | 日常开发问答 |
-| **文言文** | **71%** | **70%** | 极省 token，debug/explain 类首选 |
-
-文言文在最难压缩的类目（debug / explain / howto）反超精 8-12pp —— 文言文不是审美点缀，是真正的高压缩模式。详见 [`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)（v1 历史快照在 [`RESULTS.md`](benchmark/RESULTS.md)）。
-
-## 一图看进展
-
-![moyan token-compression progression](docs/progression.png)
-
-从最初基础规则的 52.7%，经过手写 + autoskill 多轮迭代到 v1 终态 61%，再叠加 Sonnet 4.6 模型升级（+4.8pp）和切换文言文级别（+4.8pp），最终落在 **70.6%**。autoskill v2 四轮全 discard 证实当前 SKILL.md 在 Sonnet 4.6 上已达局部最优；进一步收益来自模型升级与级别切换，而非新规则。重现：`pip install matplotlib && python benchmark/plot.py`。
-
-## 看一眼差别
+## 效果
 
 输入：「为什么我这条 SQL 查询越来越慢？」
 
@@ -38,95 +15,73 @@
 | 精 | 三大常因：WHERE 无索引 → 全表扫描、执行计划走错索引、JOIN 顺序差。先 `EXPLAIN`。 |
 | 文言文 | 查询愈慢，多缘全表之扫。先以 `EXPLAIN` 察其执行之道，加索引于 `WHERE` 之列，则速矣。 |
 
+在 52 条编程问答上测 `claude-sonnet-4-6`，相对中文 normal baseline 的 output token 节省：
+
+| 级别 | 中位 | 均值 | 适用 |
+|---|---|---|---|
+| 简 | 64% | 63% | 正式文档、对外沟通 |
+| 精（默认）| 66% | 67% | 日常开发问答 |
+| 文言文 | **71%** | **70%** | debug / explain / howto 类首选 |
+
+文言文在最难压缩的类目（debug / explain / howto）反超精 8-12pp，因其语法天然更紧凑（无的/了/着、介词少、倒装允许）。例外：commit 类目 精 +9pp，Conventional Commits 需英文关键字，文言文反而拖长。
+
 ## 安装
 
-### 方式一：marketplace（推荐）
-
 ```bash
+# marketplace（推荐）
 /plugin marketplace add jaceyang97/moyan
 /plugin install moyan@moyan
-```
 
-### 方式二：本地 clone
-
-```bash
+# 或本地 clone
 git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 ```
 
-然后在 Claude Code 中 `/plugin` 启用。
-
-## 快速开始
-
-只需一个命令：
+启用后通过 `/moyan` 激活：
 
 ```
-/moyan            # 启动（精 = 默认级别，简繁随输入）
-
-# 切级别
-/moyan 简         # 正式但紧凑
-/moyan 精         # 默认：片段式、短词
-/moyan 文言文     # 最省字，古雅
-
-# 切字形
-/moyan 简体       # 强制简体
-/moyan 繁體       # 强制繁體
-
-# 可组合，顺序不限
-/moyan 繁體 文言文
-
-停止莫言           # 恢复正常
+/moyan            # 默认级别 精
+/moyan 简         # 切级别
+/moyan 文言文
+/moyan 简体       # 切字形
+/moyan 繁體
+/moyan 繁體 文言文 # 可组合，顺序不限
+停止莫言           # 关闭
 ```
 
-启动后写 commit、做 code review、答技术问题 —— 一律按莫言风格输出。无需切换。
+激活后所有回复（含 commit / code review / 技术问答）按当前级别输出。以下场景自动暂停压缩、完整叙述后恢复：安全警告、不可逆操作确认（删表 / 强推 / 覆盖文件）、多步顺序指令、用户明确要求澄清。
 
-## 安全边界
+## Benchmark
 
-以下情况 **自动暂停莫言模式**，完整叙述后再恢复：
+5 组对照（A 英文 normal / B 中文 normal / C-E 三档莫言）× 52 条 prompt（4 难度 × 8 类别），stratified 39 train / 13 holdout，盲评判官（Opus 4.6 跨家族判 Sonnet 4.6 响应）。
 
-- 安全警告
-- 不可逆操作确认（删除表、强推、覆盖文件）
-- 多步顺序指令（片段排序易误）
-- 用户明确要求澄清
+![progression](docs/progression.png)
 
-## 涵盖场景
+进展轨迹：手写迭代 v1 init 52.7% → v1 终态 61% → 模型升级 Sonnet 4.6 +4.8pp → 切文言文级别 +4.8pp。当前最高 **70.6%**。autoskill v2 四轮自动迭代全部 discard，证实当前 SKILL.md 在 Sonnet 4.6 上已达局部最优；进一步收益来自模型升级与级别切换，非新规则。
 
-主技能 `moyan` 启动后自动覆盖：
-
-| 场景 | 行为 |
-|------|------|
-| 普通问答 | 按当前级别（简 / 精 / 文言文）压缩输出 |
-| 写 commit | 转 Conventional Commits，标题 ≤50 字符，only-when-needed body |
-| code review | 一行式：`L42: 重：user 可空。加判空守卫。` |
-| 安全 / 破坏性操作 | 自动暂停压缩，完整叙述后恢复 |
+完整方法、per-category 数字、复现命令：[`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)。v1 历史快照：[`RESULTS.md`](benchmark/RESULTS.md)。autoskill loop 设计：[`benchmark/program.md`](benchmark/program.md)。
 
 ## 仓库结构
 
 ```
 moyan/
-├── .claude-plugin/
-│   ├── plugin.json
-│   └── marketplace.json
-├── skills/
-│   └── moyan/SKILL.md
-├── benchmark/
-│   ├── program.md           # autoskill agent loop（agent 读这个，自己跑迭代）
-│   ├── evaluate.py          # 单标量指标，print `score: …`
-│   ├── results.tsv          # 实时迭代日志（commit / train / holdout / status / desc）
-│   ├── RESULTS.md           # v1 历史结果
-│   ├── prompts.jsonl        # 52 条测试集
-│   ├── splits/              # train / holdout 分割
-│   ├── run.py · judge.py · lib.py  # 评测基础设施
-│   └── README.md            # quickstart + 4-file 说明
-├── README.md
-└── LICENSE
+├── .claude-plugin/{plugin.json, marketplace.json}
+├── skills/moyan/SKILL.md            # the artifact
+├── benchmark/                       # eval + autoskill loop (autoresearch shape)
+│   ├── program.md · evaluate.py     # agent-as-loop spec + scalar metric
+│   ├── lib.py · run.py · judge.py   # infra
+│   ├── plot.py                      # progression chart generator
+│   ├── prompts.jsonl · splits/      # 52 prompts + train/holdout split
+│   └── results.tsv · RESULTS{,_v2}.md
+├── docs/progression.png
+└── README.md · LICENSE
 ```
 
-核心插件部分（`.claude-plugin/` + `skills/`）无脚本、无依赖、无 hooks——一个 SKILL.md 装下全部行为。`benchmark/` 是开发过程工具（[autoresearch](https://github.com/karpathy/autoresearch) 形态的自我迭代循环），不影响插件使用。开发者从 `benchmark/program.md` 入手。
+核心插件（`.claude-plugin/` + `skills/`）无脚本、无依赖、无 hooks。`benchmark/` 是开发工具，不参与插件运行。
 
-## 致谢 / 缘起
+## 致谢
 
-- [Julius Brussee / caveman](https://github.com/JuliusBrussee/caveman) —— 原作。本仓库的初衷：向原作者提的 PR [#76](https://github.com/JuliusBrussee/caveman/pull/76) 迟迟未合并，遂单开一仓以飨中文用户。
-- 莫言先生 —— 借名
+- [Julius Brussee / caveman](https://github.com/JuliusBrussee/caveman) —— 原作。本仓库源于向原作者提的 PR [#76](https://github.com/JuliusBrussee/caveman/pull/76) 未合并。
+- 莫言先生 —— 借名。
 
 ## License
 
