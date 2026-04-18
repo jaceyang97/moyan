@@ -1,3 +1,7 @@
 commit	train_score	holdout_score	status	description
 cf8a11e	0.6589	skip	discard	扩留规则 — 训练+0.11pp，未过阈值
 bf04134	0.6309	skip	discard	换示例为debug — 训练-2.7pp，比baseline还差
+# === regime change 2026-04-18: sonnet-baseline + Opus 4.7 judge ===
+f0ed097	0.6718	skip	keep	probe v2.2 — new regime BEST (n=2 seed avg 0.6748/0.6688; judge full_rate=0.40)
+iter_003	0.6584	skip	discard	精 ≤40%→≤35% — a=0.6469 b=0.6698 均 -1.3pp（SKILL 已回滚）
+iter_004	0.6709	skip	discard	填词 += 同时/具体/本身 — n=2 均 0.6709，-0.09pp 噪声内（SKILL 已回滚）
