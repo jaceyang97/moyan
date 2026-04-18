@@ -21,11 +21,12 @@ MOYAN_GROUP = "D_moyan_jing"
 DEFAULT_MODEL = "claude-sonnet-4-6"   # bench respondent — high volume, want speed
 JUDGE_MODEL = "claude-opus-4-6"       # judge — low volume, hard pairwise reasoning
 
-# Score formula (matches v1 autoskill, kept for continuity):
-#   score = delta_median - 0.5 * max(0, 0.70 - completeness_full) - 0.2 * guard_fails
-# Threshold 0.70 (not 0.95) because pair-compare judge over-flags "missing"
-# on legitimate compression — see RESULTS.md.
-COMPLETENESS_TARGET = 0.70
+# Score formula:
+#   score = delta_median - 0.5 * max(0, COMPLETENESS_TARGET - completeness_full) - 0.2 * guard_fails
+# v1 used 0.70 (Sonnet judge baseline ~0.56). v2 uses 0.40 to match the
+# Opus 4.6 judge's baseline rate of 0.40 — measured on v0 holdout. With
+# a higher target, every iter ate a ~0.15 penalty just for tracking baseline.
+COMPLETENESS_TARGET = 0.40
 COMPLETENESS_PENALTY = 0.5
 GUARD_PENALTY = 0.2
 
