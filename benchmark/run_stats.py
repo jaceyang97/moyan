@@ -1,10 +1,10 @@
 """Compute Δ_median / Δ_mean per (model, moyan_group) vs B_zh_normal baseline.
 
-Mirrors evaluate.py's delta logic but scans all 3 moyan groups, splits by
-train/holdout, and breaks down by category. Used for the Haiku run write-up.
+Scans all 3 moyan groups, splits by train/holdout, breaks down by category.
+Works for any responder — Haiku, Sonnet, or anything else in the run dir.
 
 Usage:
-  python haiku_stats.py --run-id v2-haiku
+  python run_stats.py --run-id <run_id>
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def load_totals(run_id: str):
     d = BENCH_ROOT / "traces" / run_id
     totals: dict[tuple[str, str], int] = defaultdict(int)
     for p in d.glob("*.json"):
-        if "_judgments" in p.parts or "_judgments_kappa" in p.parts:
+        if p.name.startswith(".") or "_judgments" in p.parts or "_judgments_kappa" in p.parts:
             continue
         t = json.loads(p.read_text(encoding="utf-8"))
         if t.get("error"):
@@ -60,7 +60,7 @@ def main():
             buckets[(mg, sp)].append((pid, delta))
             cat_buckets[(mg, meta["category"], sp)].append(delta)
 
-    print(f"=== haiku_stats · run={args.run_id} ===\n")
+    print(f"=== run_stats · run={args.run_id} ===\n")
     print(f"{'group':<20} {'split':<10} {'n':>4} {'Δ_median':>10} {'Δ_mean':>10}")
     for mg in MOYAN_GROUPS:
         for sp in ("train", "holdout", "all"):

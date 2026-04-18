@@ -239,7 +239,7 @@ v2.2 变更：v2.1 基础 + 文言文 cell 加「省『的』、助词『也/矣
 ```bash
 cd benchmark
 # v2.1 / v2.2 已用 git 版本切换，v2-haiku-v21/-v22 是对应 run
-python haiku_stats.py --run-id v2-haiku-v22
+python run_stats.py --run-id v2-haiku-v22
 python run.py --run-id v2-sonnet-v22 --models claude-sonnet-4-6 \
   --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
   --samples 1 --prompt-file splits/holdout.txt
@@ -255,7 +255,7 @@ python run.py --run-id v2-haiku \
   --models claude-haiku-4-5-20251001 \
   --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
   --samples 1
-python haiku_stats.py --run-id v2-haiku
+python run_stats.py --run-id v2-haiku
 
 python judge.py --run-id v2-haiku --judge-model claude-opus-4-6 \
   --seeds 1 --prompt-file splits/holdout.txt

@@ -171,6 +171,7 @@ def main():
         models = sorted({
             json.loads(p.read_text(encoding="utf-8"))["model"]
             for p in trace_dir.glob("*.json")
+            if not p.name.startswith(".")
         })
 
     client = get_client()

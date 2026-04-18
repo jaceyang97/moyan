@@ -23,6 +23,7 @@ from lib import (
     load_prompts,
     save_trace,
     trace_path,
+    write_run_meta,
 )
 
 
@@ -113,6 +114,7 @@ def main():
     ap.add_argument("--prompt-file", default="", help="path to file with one prompt ID per line (e.g. splits/train.txt)")
     ap.add_argument("--categories", default="", help="comma-separated categories to include")
     ap.add_argument("--force", action="store_true", help="overwrite existing traces")
+    ap.add_argument("--notes", default="", help="free-form note for .meta.json")
     args = ap.parse_args()
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -140,6 +142,16 @@ def main():
         f"run_id={args.run_id} · {len(prompts)} prompts × {len(groups)} groups × "
         f"{len(models)} models × {args.samples} seeds = {total} calls"
     )
+
+    split = (Path(args.prompt_file).stem if args.prompt_file
+             else "custom" if wanted or args.categories or args.limit
+             else "all")
+    write_run_meta(
+        run_id=args.run_id, models=models, groups=groups,
+        samples=args.samples, split=split, n_prompts=len(prompts),
+        notes=args.notes,
+    )
+
     client = get_client()
 
     for model in models:

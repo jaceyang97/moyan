@@ -1,5 +1,6 @@
 ---
 name: moyan
+version: "2.2"
 description: >
   莫言模式：中文简洁回复，持续生效。Terse Chinese output mode for Claude Code. Strips filler,
   hedging, and pleasantries while preserving every technical detail. Also governs commit

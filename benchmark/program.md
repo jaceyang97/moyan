@@ -45,13 +45,17 @@ BEST=$(awk -F'\t' 'NR>1 && $4=="keep" {print $2}' benchmark/results.tsv | sort -
 BEST=${BEST:-0.0}
 BEST_HOLDOUT=$(awk -F'\t' 'NR>1 && $4=="keep" && $3!="" && $3!="skip" {print $3}' benchmark/results.tsv | sort -g | tail -1)
 BEST_HOLDOUT=${BEST_HOLDOUT:-0.0}
+
+# The run_id that holds precomputed B_zh_normal traces for this responder.
+# See benchmark/RUNS.md — pick one with the right responder + enough prompts.
+BASELINE_RUN_ID="${BASELINE_RUN_ID:-sonnet-baseline}"
 ```
 
 1. **Read state**
    - `cat skills/moyan/SKILL.md` — current artifact
    - `tail -20 benchmark/results.tsv` — recent iterations + decisions
-   - `cat benchmark/traces/v0/_judgments/*.json | head -200` — last judge feedback (if any)
-   - Look at the worst-Δ prompts in baseline: find ids in `benchmark/traces/v0` where `D_moyan_jing` saved least vs `B_zh_normal`. Read both responses. That's your weakness signal.
+   - `cat benchmark/traces/$BASELINE_RUN_ID/_judgments/*.json | head -200` — last judge feedback (if any)
+   - Look at the worst-Δ prompts in baseline: find ids in `benchmark/traces/$BASELINE_RUN_ID` where `D_moyan_jing` saved least vs `B_zh_normal`. Read both responses. That's your weakness signal.
 
 2. **Draft 3 candidate hypotheses internally; pick the most promising.** Diversity guard: skip any candidate that closely resembles the last 5 `discard`ed descriptions in `results.tsv`. Pick by: (a) targets a different weakness than the last 2 keeps, (b) is the smallest edit that could plausibly move the metric, (c) hasn't been tried. Output: ONE hypothesis, one edit. Single-edit attribution > big rewrites.
 
@@ -68,22 +72,22 @@ BEST_HOLDOUT=${BEST_HOLDOUT:-0.0}
 6. **Evaluate on train (n=2 seeds, averaged)** — single-seed noise was a real failure mode in v1:
    ```bash
    N_PADDED=$(printf %03d $N)
-   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline v0 > /tmp/eval_a.log 2>&1
-   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_b" --baseline v0 > /tmp/eval_b.log 2>&1
+   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline-run-id "$BASELINE_RUN_ID" > /tmp/eval_a.log 2>&1
+   python benchmark/evaluate.py --run-id "iter_${N_PADDED}_b" --baseline-run-id "$BASELINE_RUN_ID" > /tmp/eval_b.log 2>&1
    SCORE_A=$(grep '^score: ' /tmp/eval_a.log | tail -1 | awk '{print $2}')
    SCORE_B=$(grep '^score: ' /tmp/eval_b.log | tail -1 | awk '{print $2}')
    SCORE_TRAIN=$(awk "BEGIN { print ($SCORE_A + $SCORE_B) / 2 }")
 
    # Judge every 3 iters (~$0.10), only on the -a run for cost:
    if (( N % 3 == 0 )); then
-     python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline v0 --with-judge --skip-bench >> /tmp/eval_a.log 2>&1
+     python benchmark/evaluate.py --run-id "iter_${N_PADDED}_a" --baseline-run-id "$BASELINE_RUN_ID" --with-judge --skip-bench >> /tmp/eval_a.log 2>&1
    fi
    ```
 
 7. **Holdout gate** — only when train score looks like a keep (`SCORE_TRAIN > BEST + 0.02`):
    ```bash
    if awk "BEGIN { exit !($SCORE_TRAIN > $BEST + 0.02) }"; then
-     python benchmark/evaluate.py --run-id "holdout_${N_PADDED}" --baseline v0 --split holdout --with-judge > /tmp/eval_h.log 2>&1
+     python benchmark/evaluate.py --run-id "holdout_${N_PADDED}" --baseline-run-id "$BASELINE_RUN_ID" --split holdout --with-judge > /tmp/eval_h.log 2>&1
      SCORE_HOLDOUT=$(grep '^score: ' /tmp/eval_h.log | tail -1 | awk '{print $2}')
    else
      SCORE_HOLDOUT="skip"

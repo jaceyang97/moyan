@@ -169,7 +169,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True,
                     help="run_id for this iteration's traces")
-    ap.add_argument("--baseline", required=True,
+    ap.add_argument("--baseline-run-id", "--baseline", dest="baseline_run_id",
+                    required=True,
                     help="run_id holding the precomputed B_zh_normal baseline")
     ap.add_argument("--split", default="train", choices=["train", "holdout"],
                     help="which prompt split to evaluate on")
@@ -187,7 +188,7 @@ def main():
         print(f"status: fail:no-split-file:{split_file}")
         sys.exit(1)
 
-    base_dir = BENCH_ROOT / "traces" / args.baseline
+    base_dir = BENCH_ROOT / "traces" / args.baseline_run_id
     if not any(base_dir.glob(f"*__{BASELINE_GROUP}__*.json")):
         print(f"status: fail:no-baseline-traces:{base_dir}")
         sys.exit(1)
@@ -198,7 +199,7 @@ def main():
             print("status: fail:bench-failed")
             sys.exit(1)
 
-    deltas, n_paired = compute_deltas(args.run_id, args.baseline)
+    deltas, n_paired = compute_deltas(args.run_id, args.baseline_run_id)
     if not deltas:
         print("status: fail:no-paired-prompts")
         sys.exit(1)
@@ -211,7 +212,7 @@ def main():
     if args.with_judge:
         ids = [l.strip() for l in split_file.read_text().splitlines()
                if l.strip()][: args.judge_n]
-        completeness = run_judge_subset(args.run_id, args.baseline, ids)
+        completeness = run_judge_subset(args.run_id, args.baseline_run_id, ids)
 
     score = compute_score(delta_median, completeness, gfails)
 

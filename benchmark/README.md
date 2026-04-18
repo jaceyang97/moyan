@@ -10,9 +10,10 @@ pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # 1. Bake the baseline (one-shot, ~$3-5, ~10 min) — Sonnet 4.6 = bench respondent
-python run.py --run-id v0 --groups B_zh_normal,D_moyan_jing --models claude-sonnet-4-6 --samples 1
+python run.py --run-id sonnet-baseline --groups B_zh_normal,D_moyan_jing \
+  --models claude-sonnet-4-6 --samples 1 --notes "Sonnet baseline for autoskill"
 
-# 2. Start the loop — open Claude Code with Opus 4.6 selected, then:
+# 2. Start the loop — open Claude Code with Opus 4.7 selected, then:
 #    > Read benchmark/program.md and run the autoskill loop for 25 iterations.
 ```
 
@@ -22,9 +23,9 @@ That's it. The agent reads `program.md`, then for each iter: forms a hypothesis,
 
 | Role | Model |
 |---|---|
-| Proposer (the Claude Code session driving the loop) | `claude-opus-4-6` |
+| Proposer (the Claude Code session driving the loop) | `claude-opus-4-7` |
 | Bench respondent (what we optimize for) | `claude-sonnet-4-6` |
-| Judge (pairwise A/B completeness) | `claude-opus-4-6` |
+| Judge (pairwise A/B completeness) | `claude-opus-4-7` |
 
 Hard tasks (proposer, judge) get Opus; high-volume task (bench) gets Sonnet. Cross-family between respondent (Sonnet) and judge (Opus) decorrelates them.
 
@@ -42,14 +43,16 @@ Everything else (`run.py`, `judge.py`, `lib.py`, `prompts.jsonl`, `splits/`) is 
 ## Score formula
 
 ```
-score = delta_median  −  0.5 × max(0, 0.70 − completeness_full)  −  0.2 × guard_fails
+score = delta_median  −  0.5 × max(0, 0.30 − completeness_full)  −  0.2 × guard_fails
 ```
 
 - `delta_median` — paired output-token reduction vs B (Chinese-normal) baseline, median across prompts
 - `completeness_full` — fraction of judge ratings = "full" (computed only with `--with-judge`)
 - `guard_fails` — destructive prompts missing 警告; codegen prompts missing code blocks
 
-Threshold 0.70 (not 0.95): pair-compare judge over-flags legitimate compression as "missing"; calibrated against hand-checked judgments. See `RESULTS.md` (v1 history).
+Threshold 0.30 matches the Opus 4.7 judge's measured full-rate on v2.2 (see
+`RESULTS_v2.md` Track C). Opus 4.6 was lenient (0.44 on the same pairs), so
+the old 0.70 / 0.40 thresholds no longer apply.
 
 ## Algorithmic refinements layered into `program.md`
 
@@ -63,11 +66,14 @@ All three live in `program.md` as agent prose, not Python. Tunable in one place.
 
 ## Manual probe (one iteration, no loop)
 
+`--baseline-run-id` is whichever run holds the precomputed `B_zh_normal`
+traces you want to compare against (see `RUNS.md` for the inventory).
+
 ```bash
 # Edit SKILL.md however you like, commit, then:
-python evaluate.py --run-id manual_test --baseline v0
-python evaluate.py --run-id manual_test --baseline v0 --with-judge --skip-bench   # adds ~$0.10
-python evaluate.py --run-id manual_test --baseline v0 --split holdout --with-judge  # holdout check
+python evaluate.py --run-id manual_test --baseline-run-id sonnet-baseline
+python evaluate.py --run-id manual_test --baseline-run-id sonnet-baseline --with-judge --skip-bench   # adds ~$0.10
+python evaluate.py --run-id manual_test --baseline-run-id sonnet-baseline --split holdout --with-judge  # holdout check
 ```
 
 ## Trace schema (per API call, on disk)
@@ -89,7 +95,7 @@ python evaluate.py --run-id manual_test --baseline v0 --split holdout --with-jud
 }
 ```
 
-Stored at `traces/{run_id}/{prompt_id}__{group}__seed{n}.json`. Judgments at `traces/{run_id}/_judgments/`.
+Stored at `traces/{run_id}/{prompt_id}__{group}__seed{n}.json`. Judgments at `traces/{run_id}/_judgments/`. Run-level metadata (SKILL.md version, judge, split, created_at) at `traces/{run_id}/.meta.json` — see `RUNS.md`.
 
 ## What this replaces (v1 → v2)
 

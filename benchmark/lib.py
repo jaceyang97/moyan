@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,16 @@ def load_skill_body() -> str:
         _, _, rest = text.partition("\n---\n")
         return rest.strip()
     return text.strip()
+
+
+def skill_version() -> str:
+    """Pull the `version: ...` line from SKILL.md frontmatter; '?' if missing."""
+    text = SKILL_PATH.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return "?"
+    frontmatter, _, _ = text.partition("\n---\n")
+    m = re.search(r"^version:\s*\"?([^\"\n]+)\"?\s*$", frontmatter, re.MULTILINE)
+    return m.group(1).strip() if m else "?"
 
 
 # 5 groups. B (Chinese normal) is the primary baseline — moyan savings
@@ -165,6 +177,43 @@ def save_trace(run_id: str, trace: Trace, turn: int = 0) -> Path:
 def load_prompts() -> list[dict]:
     with (BENCH_ROOT / "prompts.jsonl").open(encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+def _git_short_sha() -> str | None:
+    """Current HEAD short SHA, or None if git isn't available."""
+    try:
+        r = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--short", "HEAD"],
+                           capture_output=True, text=True, timeout=2)
+        return r.stdout.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def write_run_meta(run_id: str, *, models: list[str], groups: list[str],
+                   samples: int, split: str, n_prompts: int,
+                   judge_model: str | None = None, notes: str = "") -> Path:
+    """Write traces/{run_id}/.meta.json so a human or agent can identify the run
+    without spelunking through trace JSONs or git log. Overwrites on re-run."""
+    d = BENCH_ROOT / "traces" / run_id
+    d.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "run_id": run_id,
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "skill": {
+            "version": skill_version(),
+            "bytes": len(SKILL_BODY),
+            "commit": _git_short_sha(),
+        },
+        "models": models,
+        "groups": groups,
+        "samples": samples,
+        "prompts": {"split": split, "n": n_prompts},
+        "judge_model": judge_model,
+        "notes": notes,
+    }
+    p = d / ".meta.json"
+    p.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
 
 
 def prompt_question(prompt: dict) -> str:

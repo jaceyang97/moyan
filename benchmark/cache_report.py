@@ -27,6 +27,8 @@ CACHE_MULT = {"input": 1.00, "creation": 1.25, "read": 0.10}
 def iter_traces(run_id: str):
     d = BENCH_ROOT / "traces" / run_id
     for p in sorted(d.glob("*.json")):
+        if p.name.startswith("."):
+            continue
         yield json.loads(p.read_text(encoding="utf-8"))
 
 

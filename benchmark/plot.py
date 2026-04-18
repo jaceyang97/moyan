@@ -59,7 +59,7 @@ def load_cloud(run_id: str, group: str) -> list[float]:
     totals_m: dict[str, int] = {}
     totals_b: dict[str, int] = {}
     for p in d.glob("*.json"):
-        if "_judgments" in p.parts:
+        if p.name.startswith(".") or "_judgments" in p.parts:
             continue
         t = json.loads(p.read_text(encoding="utf-8"))
         if t.get("error"):
