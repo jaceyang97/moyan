@@ -11,13 +11,15 @@
 
 ## 究竟省多少？
 
-在 52 条编程问答（概念解释 / 调试 / 代码审查 / commit / 多轮对话等）上测 `claude-sonnet-4-5`：
+在 52 条编程问答（概念解释 / 调试 / 代码审查 / commit / 多轮对话等）上测 `claude-sonnet-4-6`：
 
-- **output token 中位数降 54% / 均值降 59%**（holdout 13 条）
-- **0 条判官认定为技术信息丢失**
-- commit / review / auto-clarity 等边界行为全守住
+| 级别 | 中位 token 节省 | 均值节省 | 适用 |
+|---|---|---|---|
+| 简 | 64% | 63% | 正式文档、对外沟通 |
+| **精**（默认）| **66%** | **67%** | 日常开发问答 |
+| **文言文** | **71%** | **70%** | 极省 token，debug/explain 类首选 |
 
-详见 [`benchmark/RESULTS.md`](benchmark/RESULTS.md)。benchmark 可复现（52 条 prompt + run/judge/analyze 脚本全在 `benchmark/`）。
+文言文在最难压缩的类目（debug / explain / howto）反超精 8-12pp —— 文言文不是审美点缀，是真正的高压缩模式。详见 [`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)（v1 历史快照在 [`RESULTS.md`](benchmark/RESULTS.md)）。
 
 ## 看一眼差别
 
