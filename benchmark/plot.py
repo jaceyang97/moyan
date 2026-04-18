@@ -1,176 +1,190 @@
 """Render docs/progression.png — moyan token-compression progression.
 
-Karpathy/autoresearch-style: scatter of every attempt, kept points colored,
-discards gray, best-so-far step line, annotations on milestones.
+Timeline of every SKILL.md iteration + level discoveries that moved the needle.
+Each point: Δ_median (output-token reduction vs B_zh_normal) on the benchmark.
+Big colored dot = kept/discovered. Gray dot = discarded. Number above every dot.
+Step line = best-so-far. Per-prompt scatter cloud under current-best entries
+so you can see the underlying distribution, not just the headline median.
 
-Data is hardcoded here (small, hand-curated from RESULTS.md + RESULTS_v2.md +
-results.tsv) — this is a doc generator, not a live dashboard.
-
-Usage:
+Data is hand-curated from RESULTS{,_v2}.md + git log + local traces.
+Regenerate after any new iteration:
     pip install matplotlib
     python benchmark/plot.py
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
-# Chronological timeline. delta = Δ_median (output-token reduction vs B_zh_normal).
-# All values for moyan 精 (default), except the final 文言文 entry.
+BENCH = Path(__file__).resolve().parent
+BASELINE_GROUP = "B_zh_normal"
+
+# --- timeline ---------------------------------------------------------------
+# Δ = moyan 精 holdout Δ_median vs B_zh_normal (same prompts, same metric).
+# The final entry flips to 文言文 — kept in the headline because it's the
+# mode we now recommend for debug/explain and it's the current SOTA.
 EVENTS = [
-    # ----- v1 era: Sonnet 4.5, hand + autoskill iterations -----
-    dict(idx=0,  delta=52.7, status="start",   label="v1 init",
-         note="基础规则\n去客套·去填词·去铺垫"),
-    dict(idx=1,  delta=52.3, status="keep",    label="v1·1",
-         note="扩填词黑名单"),
-    dict(idx=2,  delta=56.5, status="keep",    label="v1·2",
-         note="比较类→差异表"),
-    dict(idx=3,  delta=56.0, status="discard", label="v1·3"),
-    dict(idx=4,  delta=61.0, status="keep",    label="v1·4",
-         note="枚举原因\n按优先级短表"),
-    dict(idx=5,  delta=63.7, status="discard", label="v1·5"),
-    # ----- transition: model upgrade (no SKILL.md change) -----
-    dict(idx=6,  delta=65.8, status="upgrade", label="model 4.6",
-         note="切 Sonnet 4.6\n免费 +4.8pp"),
-    # ----- v2 era: Sonnet 4.6, autoskill iters (all discarded) -----
-    dict(idx=7,  delta=67.8, status="discard", label="v2·0",
-         note="枚举解法\nholdout 崩 −20pp"),
-    dict(idx=8,  delta=65.9, status="discard", label="v2·1"),
-    dict(idx=9,  delta=66.3, status="discard", label="v2·2"),
-    dict(idx=10, delta=63.1, status="discard", label="v2·3"),
-    # ----- discovery: 文言文 level (no SKILL.md change, just measured) -----
-    dict(idx=11, delta=70.6, status="discover", label="文言文",
-         note="切级别即得\n最高 +4.8pp"),
+    # v1 era — Sonnet 4.5, hand + autoskill iterations on 精
+    dict(x=0,  d=52.7, keep=True,  tag="v1 init"),
+    dict(x=1,  d=52.3, keep=False, tag="v1·0"),
+    dict(x=2,  d=56.5, keep=True,  tag="v1·1"),
+    dict(x=3,  d=56.0, keep=False, tag="v1·2"),
+    dict(x=4,  d=61.0, keep=True,  tag="v1·3"),
+    dict(x=5,  d=63.7, keep=False, tag="v1·4"),
+    # model upgrade — no SKILL.md change
+    dict(x=6,  d=65.8, keep=True,  tag="Sonnet 4.6", marker="D"),
+    # v2 era — Sonnet 4.6, autoskill iters (all discarded — plateau)
+    dict(x=7,  d=67.8, keep=False, tag="v2·0"),
+    dict(x=8,  d=65.9, keep=False, tag="v2·1"),
+    dict(x=9,  d=66.3, keep=False, tag="v2·2"),
+    dict(x=10, d=63.1, keep=False, tag="v2·3"),
+    # discovery — level switch (no rule change), Sonnet 4.6 holdout 文言文
+    dict(x=11, d=70.6, keep=True,  tag="文言文", marker="*"),
+    # Track C — SKILL.md v2.2 trim + quantitative level targets
+    dict(x=12, d=70.0, keep=True,  tag="v2.2 精"),
+    dict(x=13, d=74.5, keep=True,  tag="v2.2 文言文", marker="*"),
 ]
 
-COLORS = {
-    "start":    "#1f77b4",  # blue
-    "keep":     "#2ca02c",  # green
-    "discard":  "#bdbdbd",  # gray
-    "upgrade":  "#9467bd",  # purple
-    "discover": "#ff7f0e",  # orange
-}
-MARKERS = {
-    "start": "s", "keep": "o", "discard": "o",
-    "upgrade": "D", "discover": "*",
-}
-SIZES = {
-    "start": 160, "keep": 140, "discard": 90,
-    "upgrade": 170, "discover": 360,
+# Per-prompt Δ cloud — drawn as a faint vertical strip under the median dot
+# for entries where we still have local traces. Gives the viewer a sense of
+# the distribution behind every headline median.
+def load_cloud(run_id: str, group: str) -> list[float]:
+    d = BENCH / "traces" / run_id
+    if not d.exists():
+        return []
+    totals_m: dict[str, int] = {}
+    totals_b: dict[str, int] = {}
+    for p in d.glob("*.json"):
+        if "_judgments" in p.parts:
+            continue
+        t = json.loads(p.read_text(encoding="utf-8"))
+        if t.get("error"):
+            continue
+        pid = t["prompt_id"]
+        out = t["usage"]["output_tokens"]
+        if t["group"] == group:
+            totals_m[pid] = totals_m.get(pid, 0) + out
+        elif t["group"] == BASELINE_GROUP:
+            totals_b[pid] = totals_b.get(pid, 0) + out
+    deltas = []
+    for pid, m in totals_m.items():
+        b = totals_b.get(pid)
+        if not b:
+            continue
+        deltas.append((1 - m / b) * 100)
+    return deltas
+
+
+CLOUDS = {
+    12: load_cloud("v2-sonnet-v22", "D_moyan_jing"),
+    13: load_cloud("v2-sonnet-v22", "E_moyan_wenyan"),
 }
 
 
 def best_so_far(events):
-    best, out = -float("inf"), []
+    best, out = -1e9, []
     for e in events:
-        if e["status"] in ("keep", "start", "upgrade", "discover"):
-            best = max(best, e["delta"])
+        if e.get("keep"):
+            best = max(best, e["d"])
         out.append(best)
     return out
 
 
 def render(out_path: Path):
     plt.style.use("seaborn-v0_8-whitegrid")
-    # Pick first available CJK-capable font
     import matplotlib.font_manager as fm
     cjk_candidates = ["Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Zen Hei",
                       "PingFang SC", "Heiti TC", "SimHei", "Source Han Sans SC"]
-    available = {f.name for f in fm.fontManager.ttflist}
-    cjk = next((c for c in cjk_candidates if c in available), None)
+    avail = {f.name for f in fm.fontManager.ttflist}
+    cjk = next((c for c in cjk_candidates if c in avail), None)
     plt.rcParams["font.family"] = [cjk, "DejaVu Sans", "sans-serif"] if cjk else ["DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
 
     fig, ax = plt.subplots(figsize=(13, 7))
 
+    GREEN = "#2ca02c"
+    GRAY  = "#b5b5b5"
+    DARK  = "#1a1a1a"
+
+    xs = [e["x"] for e in EVENTS]
     bsf = best_so_far(EVENTS)
-    xs = [e["idx"] for e in EVENTS]
 
-    # Best-so-far step line (the headline arc)
-    ax.step(xs, bsf, where="post", color="#2ca02c", linewidth=2.6,
-            alpha=0.85, zorder=2, label="best so far")
-    ax.fill_between(xs, [52.7] * len(xs), bsf, step="post",
-                    color="#2ca02c", alpha=0.06, zorder=1)
+    # 1. best-so-far step line
+    ax.step(xs, bsf, where="post", color=GREEN, linewidth=2.4,
+            alpha=0.9, zorder=2)
+    ax.fill_between(xs, [min(e["d"] for e in EVENTS) - 2] * len(xs), bsf,
+                    step="post", color=GREEN, alpha=0.05, zorder=1)
 
-    # Scatter every attempt
+    # 2. per-prompt scatter cloud (faint, under the headline dot)
+    import random
+    rng = random.Random(0)
+    for x, cloud in CLOUDS.items():
+        jx = [x + (rng.random() - 0.5) * 0.45 for _ in cloud]
+        ax.scatter(jx, cloud, s=14, color=GREEN, alpha=0.18,
+                   edgecolor="none", zorder=3)
+
+    # 3. headline dot for every iteration
     for e in EVENTS:
-        s = e["status"]
-        edge = "#222" if s != "discard" else "#888"
-        ax.scatter(e["idx"], e["delta"], c=COLORS[s], marker=MARKERS[s],
-                   s=SIZES[s], edgecolor=edge, linewidth=0.9, zorder=4)
+        color = GREEN if e["keep"] else GRAY
+        marker = e.get("marker", "o")
+        size = 220 if marker == "*" else (160 if marker == "D" else 120)
+        ax.scatter(e["x"], e["d"], c=color, marker=marker, s=size,
+                   edgecolor=DARK if e["keep"] else "#888",
+                   linewidth=0.9, zorder=5)
+        # number above every dot
+        ax.annotate(f"{e['d']:.1f}",
+                    xy=(e["x"], e["d"]),
+                    xytext=(0, 9 if e["keep"] else 7),
+                    textcoords="offset points",
+                    ha="center", va="bottom",
+                    fontsize=9,
+                    color=DARK if e["keep"] else "#888",
+                    weight="semibold" if e["keep"] else "normal")
 
-    # Milestone annotations — positions hand-tuned to avoid overlaps
-    annot_layout = {
-        0:  dict(dx=0.0,  dy=-1.5, va="top",    ha="center"),  # v1 init below
-        1:  dict(dx=0.0,  dy=-1.5, va="top",    ha="center"),  # v1·1 below
-        2:  dict(dx=0.0,  dy=+1.4, va="bottom", ha="center"),  # v1·2 above
-        4:  dict(dx=0.0,  dy=+1.4, va="bottom", ha="center"),  # v1·4 above
-        5:  dict(dx=+0.8, dy=+1.6, va="bottom", ha="left"),    # v1·5 up-right (discard, but offset)
-        6:  dict(dx=-0.6, dy=+1.4, va="bottom", ha="right"),   # upgrade up-left
-        7:  dict(dx=+0.5, dy=+1.6, va="bottom", ha="left"),    # v2·0 up-right
-        11: dict(dx=-0.6, dy=+1.4, va="bottom", ha="right"),   # 文言文 up-left
-    }
-    for e in EVENTS:
-        if "note" not in e:
-            continue
-        lay = annot_layout.get(e["idx"], dict(dx=0, dy=1.4, va="bottom", ha="center"))
-        s = e["status"]
-        ax.annotate(
-            e["note"],
-            xy=(e["idx"], e["delta"]),
-            xytext=(e["idx"] + lay["dx"], e["delta"] + lay["dy"]),
-            textcoords="data",
-            fontsize=8.5,
-            ha=lay["ha"], va=lay["va"],
-            color="#222" if s != "discard" else "#777",
-            linespacing=1.25,
-        )
+    # 4. model-switch + track dividers
+    for x, text, color in [
+        (5.5, "Sonnet 4.5 → 4.6", "#9467bd"),
+        (11.5, "SKILL.md v2.2 (−29%)", "#ff7f0e"),
+    ]:
+        ax.axvline(x=x, color=color, linestyle="--", alpha=0.4, zorder=1)
+        ax.text(x, 49.7, text, color=color, fontsize=8.5,
+                ha="center", va="bottom",
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.9, pad=2))
 
-    # Model-switch divider
-    ax.axvline(x=6, color="#9467bd", linestyle="--", alpha=0.35, zorder=1)
-    ax.text(6, 49.5, "Sonnet 4.5 → 4.6", color="#9467bd",
-            fontsize=8.5, ha="center", va="bottom",
-            bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2))
-
-    # Axes
+    # 5. axes, title
     ax.set_xlabel("experiment timeline", fontsize=11, color="#333")
-    ax.set_ylabel("token reduction Δ_median (%)", fontsize=11, color="#333")
+    ax.set_ylabel("token reduction  Δ_median  (%)", fontsize=11, color="#333")
     ax.set_title("moyan: token-compression progression",
-                 fontsize=15, pad=18, color="#111", weight="bold")
+                 fontsize=15, pad=18, color=DARK, weight="bold")
     ax.text(0.5, 1.015,
-            "vs Chinese-normal baseline · median across paired prompts · 莫言 精 unless noted",
+            "Sonnet 4.6 · holdout median · vs Chinese-normal baseline · 精 unless ★ = 文言文",
             transform=ax.transAxes, ha="center", fontsize=9.5, color="#666")
 
     ax.set_xticks(xs)
-    ax.set_xticklabels([e["label"] for e in EVENTS], rotation=25, ha="right",
+    ax.set_xticklabels([e["tag"] for e in EVENTS], rotation=28, ha="right",
                        fontsize=9, color="#444")
-    ax.set_ylim(48, 76)
-    ax.set_xlim(-0.6, 11.6)
+    ax.set_ylim(48, 78)
+    ax.set_xlim(-0.6, len(EVENTS) - 0.4)
     ax.tick_params(axis="y", labelcolor="#444", labelsize=9)
 
-    # Custom legend
+    # 6. minimal legend — 3 items only
     handles = [
-        plt.Line2D([], [], marker="s", color="w", markerfacecolor=COLORS["start"],
-                   markeredgecolor="#222", markersize=10, label="initial"),
-        plt.Line2D([], [], marker="o", color="w", markerfacecolor=COLORS["keep"],
-                   markeredgecolor="#222", markersize=10, label="kept (improved)"),
-        plt.Line2D([], [], marker="o", color="w", markerfacecolor=COLORS["discard"],
-                   markeredgecolor="#888", markersize=9, label="discarded"),
-        plt.Line2D([], [], marker="D", color="w", markerfacecolor=COLORS["upgrade"],
-                   markeredgecolor="#222", markersize=10, label="model upgrade"),
-        plt.Line2D([], [], marker="*", color="w", markerfacecolor=COLORS["discover"],
-                   markeredgecolor="#222", markersize=15,
-                   label="level switch (no SKILL.md change)"),
-        plt.Line2D([], [], color="#2ca02c", linewidth=2.6, label="best so far"),
+        plt.Line2D([], [], marker="o", color="w", markerfacecolor=GREEN,
+                   markeredgecolor=DARK, markersize=10, label="kept"),
+        plt.Line2D([], [], marker="o", color="w", markerfacecolor=GRAY,
+                   markeredgecolor="#888", markersize=10, label="discarded"),
+        plt.Line2D([], [], color=GREEN, linewidth=2.4, label="best so far"),
     ]
     ax.legend(handles=handles, loc="lower right", fontsize=9,
-              framealpha=0.95, edgecolor="#ddd")
+              framealpha=0.95, edgecolor="#ddd", ncol=3)
 
-    # "Current best" callout pointing at the 文言文 star
-    ax.annotate(f"current best  {EVENTS[-1]['delta']}%",
-                xy=(11, EVENTS[-1]["delta"]),
-                xytext=(9.6, 74.5),
+    # 7. current-best callout
+    best = EVENTS[-1]
+    ax.annotate(f"current best  {best['d']:.1f}%",
+                xy=(best["x"], best["d"]),
+                xytext=(best["x"] - 2.4, 76.5),
                 fontsize=10.5, color="#ff7f0e", weight="bold", ha="left",
                 arrowprops=dict(arrowstyle="->", color="#ff7f0e",
                                 lw=1.3, alpha=0.85,
@@ -183,5 +197,4 @@ def render(out_path: Path):
 
 
 if __name__ == "__main__":
-    out = Path(__file__).resolve().parent.parent / "docs" / "progression.png"
-    render(out)
+    render(BENCH.parent / "docs" / "progression.png")

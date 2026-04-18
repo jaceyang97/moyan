@@ -15,17 +15,17 @@
 | 精 | 三大常因：WHERE 无索引 → 全表扫描、执行计划走错索引、JOIN 顺序差。先 `EXPLAIN`。 |
 | 文言文 | 查询愈慢，多缘全表之扫。先以 `EXPLAIN` 察其执行之道，加索引于 `WHERE` 之列，则速矣。 |
 
-在 52 条编程问答上用 Sonnet 4.6 测了一轮，对比中文 normal 回答，output token 能省这么多：
+在 71 条编程问答上用 Sonnet 4.6 测了一轮，对比中文 normal 回答，output token 能省这么多（holdout 18 条）：
 
 | 级别 | 中位 | 均值 | 适合 |
 |---|---|---|---|
-| 简 | 64% | 63% | 正式文档、对外沟通 |
-| 精（默认）| 66% | 67% | 日常开发问答 |
-| 文言文 | **71%** | **70%** | debug、概念解释这类 |
+| 简 | 68% | 64% | 正式文档、对外沟通 |
+| 精（默认）| 70% | 66% | 日常开发问答 |
+| 文言文 | **75%** | **68%** | debug、概念解释这类 |
 
 有意思的是，文言文在最难压的类目（debug / explain / howto）反而比精多省 8-12pp。语法天然就紧：没有的/了/着，介词少，倒装允许。
 
-但 commit 是例外。commit message 需要 feat / fix 这些英文关键字，文言文反而拖长，精比它好 9pp。所以 SKILL.md 里规定 commit 不套级别压缩，老实走 Conventional Commits。
+但 commit 是例外。commit message 需要 feat / fix 这些英文关键字，文言文反而拖长。所以 SKILL.md 里规定 commit 不套级别压缩，老实走 Conventional Commits。
 
 ## 安装
 
@@ -54,13 +54,15 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 
 ## Benchmark
 
-52 条编程 prompt，分 4 难度 × 8 类别，39 训 13 holdout。5 组对照：英文 normal、中文 normal、莫言三档。响应用 Sonnet 4.6，判官 Opus 4.6 —— 故意跨家族，避免自评。
+71 条编程 prompt（v2 从 52 扩到 71），分 4 难度 × 8 类别，53 训 18 holdout。5 组对照：英文 normal、中文 normal、莫言三档。响应用 Sonnet 4.6，判官 Opus 4.6 —— 故意跨家族，避免自评。
 
 ![progression](docs/progression.png)
 
-v1 第一版手写规则起步 52.7%，加规则到 61%。之后 Sonnet 4.5 升到 4.6 自带 +5pp，切文言文级别再 +5pp，到现在 70.6%。最后用 autoskill 跑了 4 轮自动迭代，全部 discard —— 说明 SKILL.md 在这个模型上已经撞到天花板，再改规则就是在噪声里打转。接下来的收益大概率来自模型升级或级别切换，不是新规则。
+v1 手写规则从 52.7% 爬到 61%。Sonnet 4.5 升 4.6 自带 +5pp，切文言文再 +5pp 到 70.6%，然后 autoskill 4 轮自动迭代全 discard —— 规则层面撞天花板。最新一轮（v2.2）手动把 SKILL.md 裁掉 29%（7882 → 5561 bytes），把级别说法改成量化压缩目标（简 ≤60% / 精 ≤40% / 文言文 ≤30%），再加文言文助词清单。holdout 上精从 66 涨到 70%，文言文从 73 涨到 **74.5%**，当前最好。SKILL.md 更短、效果更好、输出更有区分度。
 
-完整数字、per-category 表、复现命令：[`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)。v1 历史：[`RESULTS.md`](benchmark/RESULTS.md)。autoskill loop 设计：[`benchmark/program.md`](benchmark/program.md)。
+同样的 SKILL.md 到 Haiku 4.5 上三档会坍缩成 53 / 55 / 52% —— Haiku 不太 follow 级别差异，这是模型能力限制，不是 SKILL.md 的锅。判官 κ = 0.21 说明 completeness 信号本身就有噪声，autoskill 的 quality gate 基于它而来，所以早期几轮 discard 也可能是判官漂移而非真退步。
+
+完整数字、per-category 表、Haiku/κ/cache 分析、复现命令：[`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)。v1 历史：[`RESULTS.md`](benchmark/RESULTS.md)。autoskill loop 设计：[`benchmark/program.md`](benchmark/program.md)。
 
 ## 仓库结构
 
