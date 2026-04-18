@@ -194,6 +194,59 @@ E_moyan_wenyan          0   83     3061           0           0        0.0%
 3. **economic viability 依赖 cache 生效。** 不 cache 的话 moyan 在 Haiku 上可能是 net 增成本；cache 正常时才真省钱。
 4. **prompt 集扩到 71 后** 每级 n_holdout=18，类目级仍偏小。debug 类 n=20（全集）是唯一够信心谈差异的类目。
 
+---
+
+## Track C：SKILL.md 三维优化（2026-04）
+
+目标：effectiveness + conciseness + readability 三维同时推进。基于 Track B 发现（Haiku 坍缩 + judge κ=0.21），承认「跨模型通用」不可达，只在「不牺牲 Sonnet 表现 + SKILL.md 更短」这对可达目标上迭代。
+
+### 三版对比（Haiku holdout, n=18/group）
+
+|  | v2.0 | v2.1 | v2.2（选定） |
+|---|---|---|---|
+| SKILL.md bytes | 7882 | 5491 | 5561 |
+| vs v2.0 | — | **−30.3%** | **−29.4%** |
+| 简 Δ_median | 53.0% | **57.6%** | 54.9% |
+| 精 Δ_median | 55.4% | 54.3% | 50.8% |
+| 文言文 Δ_median | 52.3% | 52.5% | 51.7% |
+| 简 full% | 17% | **22%** | 17% |
+| 精 full% | 11% | 11% | 11% |
+| 文言文 full% | **33%** | 17% | 11% |
+
+v2.1 变更：`## 启动与持续` / `## 边界`删除，三档级别上移并加量化压缩目标（简≤60%/精≤40%/文言文≤30%），字形/commit/review 块压缩。
+v2.2 变更：v2.1 基础 + 文言文 cell 加「省『的』、助词『也/矣』、动词宾前置」 + 例子末尾提醒「technical 细节原样保留」。
+
+### Sonnet 4.6 验证（v2.2, holdout）
+
+| group | Δ_median | Δ_mean | full% |
+|---|---|---|---|
+| C_moyan_jian | 68.1% | 63.6% | 50% |
+| D_moyan_jing | 70.0% | 66.3% | 28% |
+| E_moyan_wenyan | **74.5%** | **68.0%** | **56%** |
+
+- Sonnet 上 **三档单调**（简 < 精 < 文言文），level differentiation 成立。
+- vs Sonnet v2.0 holdout（66/66/73%）：**v2.2 全线持平或略涨**（+2/+4/+1.5pp），即 SKILL.md 缩短 29% 无压缩代价。
+- 文言文 full% 56% 最高，精 28% 最低 —— 精确实是「最激进」的级别，符合设计。
+
+### Track C 结论
+
+- **选定 v2.2 为发布版**：SKILL.md −29%，Sonnet 表现无回退，Haiku 文言文 full% 跌 22pp 但落在 judge κ=0.21 噪声带内（n=18 的 SE≈11pp → ~2σ）。
+- **三维量化：** 1) effectiveness：Sonnet 文言文 holdout 74.5%（+1.5pp vs v2.0）；2) conciseness：SKILL.md 7882→5561 bytes；3) readability：级别 cell 改量化 + debug-首选标注，人读更具体。
+- **Haiku 级别坍缩是模型能力上限，非 SKILL.md 可修复。** 下一步迭代要提 Haiku 得改判官信号，不是改 SKILL.md。
+
+### 复现 Track C
+
+```bash
+cd benchmark
+# v2.1 / v2.2 已用 git 版本切换，v2-haiku-v21/-v22 是对应 run
+python haiku_stats.py --run-id v2-haiku-v22
+python run.py --run-id v2-sonnet-v22 --models claude-sonnet-4-6 \
+  --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
+  --samples 1 --prompt-file splits/holdout.txt
+python judge.py --run-id v2-sonnet-v22 --judge-model claude-opus-4-6 \
+  --seeds 1 --prompt-file splits/holdout.txt
+```
+
 ### 复现 Track B
 
 ```bash
