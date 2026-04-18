@@ -2,6 +2,16 @@
 
 > **Pattern:** [karpathy/autoresearch](https://github.com/karpathy/autoresearch). Agent **is** the loop. There is no Python orchestrator — you read this file, then iterate using your own tools (Read, Edit, Bash, git).
 
+## Models in this loop
+
+| Role | Model | Why |
+|---|---|---|
+| **Proposer** (you, the agent reading this file) | `claude-opus-4-6` | Hard task, low volume (~25 hypotheses/run). Start the Claude Code session in Opus 4.6. |
+| **Bench respondent** (what we're optimizing for) | `claude-sonnet-4-6` | High volume (~78 calls/iter × 25 iters ≈ 2k calls). Want speed and cost. |
+| **Judge** (pairwise A/B completeness) | `claude-opus-4-6` | Hard pairwise reasoning, low volume (~10 calls every 3 iters). Cross-family with respondent decorrelates. |
+
+If you're running this loop and you're NOT Opus 4.6, stop and ask the user to restart you in Opus 4.6.
+
 ## What you're optimizing
 
 `skills/moyan/SKILL.md` — the body (everything after the YAML frontmatter).
@@ -98,7 +108,7 @@ BEST_HOLDOUT=${BEST_HOLDOUT:-0.0}
    - `holdout_score` = step 7 result, or empty when train didn't pass (gate not triggered)
    - `status` ∈ `{keep, discard, discard:holdout-overfit, crash}`
 
-10. **Cost note** (per iter, sonnet-4-5): train ~$0.50 (n=2 seeds), holdout when triggered ~$0.10, judge every 3 iters ~$0.10 amortized. Budget ~$0.65/iter. 25 iters ≈ $16.
+10. **Cost note** (per iter): bench respondent Sonnet 4.6 with n=2 seeds ~$0.45, holdout when triggered ~$0.10, Opus judge every 3 iters ~$0.10 amortized, proposer (you, Opus 4.6) ~$0.20. Budget ~$0.85/iter. 25 iters ≈ $21.
 
 ## Plateau handling
 

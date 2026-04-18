@@ -140,8 +140,8 @@ def judgment_path(run_id: str, prompt_id: str, model: str, moyan_group: str, see
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True)
-    ap.add_argument("--judge-model", default="claude-sonnet-4-5",
-                    help="model to use for judging (Sonnet recommended — cheaper)")
+    ap.add_argument("--judge-model", default="claude-opus-4-6",
+                    help="judge model — Opus for hard pairwise reasoning (low volume)")
     ap.add_argument("--models", default="",
                     help="only judge traces from these models (default: all found)")
     ap.add_argument("--moyan-groups", default=",".join(MOYAN_GROUPS))

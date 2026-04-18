@@ -102,7 +102,7 @@ def run_one(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True, help="identifier for this run (e.g. smoke, v1)")
-    ap.add_argument("--models", default="claude-sonnet-4-5",
+    ap.add_argument("--models", default="claude-sonnet-4-6",
                     help="comma-separated model IDs")
     ap.add_argument("--groups", default=",".join(GROUPS.keys()),
                     help="comma-separated group IDs")

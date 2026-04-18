@@ -9,14 +9,24 @@ Self-improvement loop for `skills/moyan/SKILL.md`. Pattern from [karpathy/autore
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# 1. Bake the baseline (one-shot, ~$3-5, ~10 min)
-python run.py --run-id v0 --groups B_zh_normal,D_moyan_jing --models claude-sonnet-4-5 --samples 1
+# 1. Bake the baseline (one-shot, ~$3-5, ~10 min) — Sonnet 4.6 = bench respondent
+python run.py --run-id v0 --groups B_zh_normal,D_moyan_jing --models claude-sonnet-4-6 --samples 1
 
-# 2. Start the loop — open Claude Code in the repo root and say:
+# 2. Start the loop — open Claude Code with Opus 4.6 selected, then:
 #    > Read benchmark/program.md and run the autoskill loop for 25 iterations.
 ```
 
-That's it. The agent reads `program.md`, then for each iter: forms a hypothesis, edits SKILL.md, commits, runs `evaluate.py`, parses `score:`, and `git reset --hard`s on failure. ~$0.65/iter; 25 iters ≈ $16.
+That's it. The agent reads `program.md`, then for each iter: forms a hypothesis, edits SKILL.md, commits, runs `evaluate.py`, parses `score:`, and `git reset --hard`s on failure. ~$0.85/iter; 25 iters ≈ $21.
+
+## Models
+
+| Role | Model |
+|---|---|
+| Proposer (the Claude Code session driving the loop) | `claude-opus-4-6` |
+| Bench respondent (what we optimize for) | `claude-sonnet-4-6` |
+| Judge (pairwise A/B completeness) | `claude-opus-4-6` |
+
+Hard tasks (proposer, judge) get Opus; high-volume task (bench) gets Sonnet. Cross-family between respondent (Sonnet) and judge (Opus) decorrelates them.
 
 ## The 4 files that matter (autoresearch shape)
 
@@ -66,7 +76,7 @@ python evaluate.py --run-id manual_test --baseline v0 --split holdout --with-jud
 {
   "prompt_id": "L2-debug-01-useeffect-loop",
   "group": "D_moyan_jing",
-  "model": "claude-sonnet-4-5",
+  "model": "claude-sonnet-4-6",
   "seed": 0,
   "usage": { "input_tokens": 1823, "output_tokens": 412, "...": "..." },
   "analysis": {

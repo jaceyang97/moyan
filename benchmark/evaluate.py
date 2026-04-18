@@ -18,8 +18,8 @@ from pathlib import Path
 from lib import BASELINE_GROUP, BENCH_ROOT, get_client, load_prompts
 
 MOYAN_GROUP = "D_moyan_jing"
-DEFAULT_MODEL = "claude-sonnet-4-5"
-JUDGE_MODEL = "claude-sonnet-4-5"
+DEFAULT_MODEL = "claude-sonnet-4-6"   # bench respondent — high volume, want speed
+JUDGE_MODEL = "claude-opus-4-6"       # judge — low volume, hard pairwise reasoning
 
 # Score formula (matches v1 autoskill, kept for continuity):
 #   score = delta_median - 0.5 * max(0, 0.70 - completeness_full) - 0.2 * guard_fails
