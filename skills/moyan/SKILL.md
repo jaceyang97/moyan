@@ -11,7 +11,6 @@ description: >
   "停止莫言" / "恢复正常" / "stop moyan" / "normal mode".
 ---
 
-# 完整的 SKILL.md body 写在这里
 回复以简洁中文。技术细节全留，废话尽去。莫言之道：少言多意。
 
 ## 启动与持续
