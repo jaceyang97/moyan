@@ -96,11 +96,122 @@
 
 ## 已知局限
 
-- 仅在 Sonnet 4.6 上验证。Opus / Haiku 未测。
-- judge 只跑了 baseline holdout（10 条）+ iter 0 holdout（10 条），不是全集。Cohen's κ 未算。
-- holdout n=13 偏小，类目级 CI 较宽。
+- Opus 上未测。
+- holdout n=18（expansion 后）偏小，类目级 CI 仍宽。
 - 单 seed（成本权衡），单个 prompt 的 Δ 抖动 ±2-3pp 未在表里反映。
-- 多轮 prompt 仅 3 条，cache-hit 下的实际省 token 收益没单独算。
+- cache 在本次 API 环境下未生效（见 Track B · cache）。多轮 amortization 尚未实测。
+
+---
+
+## Track B 扩展（2026-04）
+
+prompt 集 52 → 71（+6 review、+4 commit、+9 multiturn）。stratified 53 train / 18 holdout。
+
+### Haiku 4.5 responder
+
+全集 71 prompt 上跑 Haiku 4.5 responder，同一 baseline (B_zh_normal) 对照。
+
+| 级别 | Δ_median holdout | Δ_median 全集 | Δ_median train |
+|---|---|---|---|
+| 简 | 53.0% | 55.1% | 56.6% |
+| 精 | 55.4% | 54.8% | 54.8% |
+| 文言文 | 52.3% | 57.1% | 57.4% |
+
+**关键发现 1：Haiku 上三档级别坍缩。** Sonnet 4.6 holdout 上三档是 66 / 66 / 73%（文言文 +7pp），Haiku 上变 53 / 55 / 52%（文言文毫无优势，甚至 holdout 略低于精）。SKILL.md 的 level abstraction 在 Haiku 上没被模型充分利用。
+
+**关键发现 2：Haiku 整体压缩比 Sonnet 低 13-20pp。** 精 holdout: Sonnet 65.5% → Haiku 55.4%。小模型在本 skill 上的压缩天花板明显更低。
+
+per-category（Haiku Δ_median，全集）：
+
+| 类目 | n | 简 | 精 | 文言文 |
+|---|---|---|---|---|
+| codegen | 5 | 58.4% | 50.3% | 58.7% |
+| commit | 8 | 77.0% | **74.6%** | 76.1% |
+| debug | 20 | 36.3% | 35.9% | 42.3% |
+| destructive | 2 | 49.3% | 53.6% | 48.4% |
+| explain | 8 | 56.9% | 51.7% | 56.0% |
+| howto | 6 | 58.3% | **64.7%** | 57.2% |
+| multiturn | 12 | 58.2% | 60.5% | 62.2% |
+| review | 10 | 55.0% | 56.0% | 59.7% |
+
+Haiku 上 **debug 类跌到 36-42%**（Sonnet 是 59-71%），差距最大。可能是 Haiku 对 debug 类本来就啰嗦，moyan 压不下来。
+
+### Haiku completeness（Opus 4.6 判）
+
+18 条 holdout × 3 moyan 组 = 54 对判官评。
+
+| 级别 | full | partial | missing | full% |
+|---|---|---|---|---|
+| 简 | 3 | 14 | 0 | 16.7% (ERR × 1) |
+| 精 | 2 | 16 | 0 | 11.1% |
+| 文言文 | 6 | 12 | 0 | **33.3%** |
+
+Sonnet v2 baseline full% 是 40%。Haiku 降到 11-33%。全部判为「partial」，没有「missing」—— 即没有丢信息的灾难，但超 60% 的回答被 Opus 判为有信息漏损。
+
+**文言文在 Haiku 上 full% 反而最高（33% vs 精 11%）**——这和 Δ_median 的方向相反。Haiku 跑精模式更激进地砍信息，文言文虽然压缩比差不多但保留更完整。
+
+### 判官 inter-rater κ（Opus vs Sonnet 4.6）
+
+同 54 对 pair 用 Sonnet 4.6 跑二判，matched n=53：
+
+```
+confusion (rows=Opus, cols=Sonnet):
+              full   partial   missing
+  full          3         8         0
+  partial       4        38         0
+  missing       0         0         0
+
+observed agreement: 0.774
+chance agreement:   0.715
+Cohen's κ:          0.205  (slight)
+```
+
+**关键发现 3：两判官 full/partial 边界上几乎是噪声。** 观察一致率 77% 听起来不错，但判官都倾向判「partial」（基线率 71%），扣掉 chance agreement 后 κ 只剩 0.21。
+
+含义：`evaluate.py` 的 `COMPLETENESS_TARGET=0.40` 质量闸门，打在判官没共识的那条边界上。autoskill loop 里 iter 0 触发 holdout 20% full 被 discard，v2 结果 40% full，这些绝对阈值都可能是判官漂移而非模型能力变化。
+
+### cache-hit（未生效）
+
+在当前 API 环境下，`cache_control: ephemeral` 没触发缓存：
+
+```
+group                turn    n   avg_in avg_cache_r avg_cache_w  cache_hit%
+B_zh_normal             0   83      229           0           0        0.0%
+C_moyan_jian            0   83     3067           0           0        0.0%
+D_moyan_jing            0   83     3063           0           0        0.0%
+E_moyan_wenyan          0   83     3061           0           0        0.0%
+（多轮 turn 1、2 同样全 0）
+```
+
+隔离测试（Sonnet 4.6 两次相同 system block）也是 cache_creation > 0 但 cache_read = 0。推测是 API 代理 / 账户配置问题，非 moyan 本身 bug。
+
+**如果 cache 正常：** 首次 call 写入 ~2830 input tokens 的 SKILL.md，后续 cached read 只算 10% = 283 tokens。多轮下 2+ turn 等于几乎免费挂载 skill。**cache 失效下：** 每次 call 都实打实多付 2830 input tokens，moyan 在 Haiku 上 output 省得少（430 tokens/call），按定价可能 net 负收益。这点没法在本环境实测到。
+
+### Track B 结论
+
+1. **SKILL.md 没法按「跨模型通用」推销。** 在 Sonnet 4.6 上校准的级别差异（文言文 +7pp）到 Haiku 上消失，完整度也大幅掉。
+2. **判官管线有噪声。** κ = 0.21 说明 autoskill 的 completeness gate 不可靠；v2 4 轮 discard 里至少 iter 0 的 holdout 20% full 判决可能是判官漂移。
+3. **economic viability 依赖 cache 生效。** 不 cache 的话 moyan 在 Haiku 上可能是 net 增成本；cache 正常时才真省钱。
+4. **prompt 集扩到 71 后** 每级 n_holdout=18，类目级仍偏小。debug 类 n=20（全集）是唯一够信心谈差异的类目。
+
+### 复现 Track B
+
+```bash
+cd benchmark
+python run.py --run-id v2-haiku \
+  --models claude-haiku-4-5-20251001 \
+  --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
+  --samples 1
+python haiku_stats.py --run-id v2-haiku
+
+python judge.py --run-id v2-haiku --judge-model claude-opus-4-6 \
+  --seeds 1 --prompt-file splits/holdout.txt
+python kappa.py judge2 --run-id v2-haiku --judge-model claude-sonnet-4-6
+python kappa.py score --run-id v2-haiku \
+  --judge-a claude-opus-4-6 --judge-b claude-sonnet-4-6
+
+python cache_report.py --run-id v2-haiku
+```
 
 ---
 

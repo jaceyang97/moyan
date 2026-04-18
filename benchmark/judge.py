@@ -146,11 +146,16 @@ def main():
                     help="only judge traces from these models (default: all found)")
     ap.add_argument("--moyan-groups", default=",".join(MOYAN_GROUPS))
     ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--prompt-file", default="",
+                    help="restrict to prompt IDs in this file (e.g. splits/holdout.txt)")
     ap.add_argument("--rng-seed", type=int, default=42, help="for reproducible A/B order")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
     prompts = {p["id"]: p for p in load_prompts()}
+    if args.prompt_file:
+        wanted = {l.strip() for l in Path(args.prompt_file).read_text().splitlines() if l.strip()}
+        prompts = {pid: p for pid, p in prompts.items() if pid in wanted}
     moyan_groups = [g.strip() for g in args.moyan_groups.split(",")]
 
     # Discover model IDs present in traces if not given.
