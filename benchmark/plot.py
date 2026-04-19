@@ -87,21 +87,11 @@ TIMELINE = [
     # Track C — SKILL.md trim to v2.2 (Sonnet holdout scores)
     dict(tag="C-精",    d=70.0, kept=True,  note="SKILL 缩 29%（精）",           era="C"),
     dict(tag="C-文言",  d=74.5, kept=True,  note="SKILL 缩 29%（文言）",         era="C"),
-    # Track D — autoskill under Opus 4.7 judge. All values hardcoded from
-    # RESULTS_v2.md (Track D iteration log + skill23-holdout-allgroups table)
-    # so the chart renders without trace files. Train scores are mean of two
-    # seeds (a/b); holdout is single-seed n=18.
-    dict(tag="D-probe",   d=67.2, kept=True,  note="换 Opus 4.7 判官",        era="D"),
-    dict(tag="D-3",       d=65.8, kept=False, note="精 40%→35%（挤压）",       era="D"),
-    dict(tag="D-4",       d=67.1, kept=False, note="扩填词表",                era="D"),
-    dict(tag="D-5",       d=69.5, kept=True,  note="去 --- 与 ## 标题",       era="D"),
-    # D-5 holdout collapsed — three levels (简 73.0 / 精 73.9 / 文言 74.5)
-    # from skill23-holdout-allgroups. Story: Track D pulled 简/精 toward
-    # 文言, 文言 itself saturated. April-2026 Opus-4.7 calibration confirmed
-    # judge-shift on 文言 ≈ 0 (v2.2-文言 = 74.4 under both Opus 4.6 and 4.7).
-    dict(tag="D-5 ho",    d=73.9, kept=True,  note="三档 73 / 73.9 / 74.5（简/精/文言）", era="D"),
-    dict(tag="D-6",       d=70.6, kept=False, note="删 SQL 示例（train 涨）",  era="D"),
-    dict(tag="D-6 ho",    d=64.4, kept=False, note="holdout −8pp（overfit）",  era="D"),
+    # Chart ends at C-文言 (the peak). Track D explored further but didn't
+    # break above 74.5 — it pulled 简/精 holdout +4pp toward the 文言 ceiling
+    # while 文言 itself saturated. That story lives in RESULTS_v2.md (Track D
+    # section + 横向验证 table) and the calibration runs (calib-v22-wenyan,
+    # calib-d5-wenyan, April 2026), not in this chart.
 ]
 
 
@@ -215,7 +205,6 @@ def render(out_path: Path):
         "bump": "模型升级",
         "v2":   "v2 · Sonnet 4.6 + Opus 4.6 判官",
         "C":    "Track C · SKILL 精简",
-        "D":    "Track D · Opus 4.7 判官 autoskill",
     }
     y_top = max(e["d"] for e in events) + 6
     for era, xs in era_bounds.items():
@@ -254,6 +243,12 @@ def render(out_path: Path):
     ]
     ax.legend(handles=handles, loc="lower right", fontsize=9.5,
               framealpha=0.95, edgecolor="#ddd")
+
+    # Footnote: tell the post-peak story without putting a flat tail in the chart.
+    fig.text(0.5, -0.02,
+             "C-文言 之后又跑了 7 次 Track D autoskill 迭代（Opus 4.7 判官）："
+             "简/精 holdout 拉近 文言 ~4pp，文言 已饱和。详见 benchmark/RESULTS_v2.md。",
+             ha="center", va="top", fontsize=9.5, color="#666", style="italic")
 
     plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
