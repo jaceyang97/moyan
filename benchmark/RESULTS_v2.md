@@ -328,6 +328,19 @@ Track C 以 SKILL.md v2.2 收尾后，重建 regime：
 
 > **之前声称过"级别排序翻转"（commit `09db6fd`）是方法瑕疵**：用了 paired n=16（只保留所有 run 都有的 prompt）并跨 run 对 baseline（skill23 vs sonnet-baseline）。修正后的对比用各 run 内部 B_zh_normal 配对 + 全 n=18，方向相反。保留旧 commit 作为方法自省记录。
 
+### 判官迁移校准（2026-04-19）
+
+回答「Track C → Track D 之间换 Opus 4.6 → 4.7 判官，C-文言 74.5% 这个数字怎么变？」。
+
+| run_id | SKILL | 级别 | judge | n | median Δ |
+|---|---|---|---|---|---|
+| `calib-v22-wenyan` | v2.2 (`616322a`) | 文言 | Opus 4.7 | 18 | **74.4%** |
+| `calib-d5-wenyan`  | D-5 (current) | 文言 | Opus 4.7 | 18 | **76.7%** |
+
+- **判官迁移对 文言 几乎无影响**：v2.2 文言 74.4% (Opus 4.7) ≈ 74.5% (Opus 4.6, Track C 原值)。Track D 在 文言 上的「飘」是采样噪声 + 级别已饱和，不是 judge 收紧。
+- **D-5 vs v2.2 在 文言 上 +2.3pp** 与 `skill23-holdout-allgroups` 表中的 0.0pp 同在 n=18 噪声带内，不构成显著改进。`progression.png` 用 `skill23` 的已发布 73.0/73.9/74.5 作为 D-5 三档 holdout 锚点。
+- **结论一致**：Track D 把 简/精 拉近 文言（−4pp 差距），文言 本身没有进一步压缩空间。
+
 ### Iter 6：删除 枚举原因 SQL 示例块（discard:holdout-overfit）
 
 继续 autoskill。假设：枚举原因规则的 3 行 worked example 可能冗余（规则文字已说明"3-4 条短表，格式 `[原因] — [验证法]`"）。删之测试。

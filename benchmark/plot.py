@@ -87,20 +87,23 @@ TIMELINE = [
     # Track C — SKILL.md trim to v2.2 (Sonnet holdout scores)
     dict(tag="C-精",    d=70.0, kept=True,  note="SKILL 缩 29%（精）",           era="C"),
     dict(tag="C-文言",  d=74.5, kept=True,  note="SKILL 缩 29%（文言）",         era="C"),
-    # Track D — autoskill under Opus 4.7 judge (per-iter average from traces)
-    dict(tag="D-probe", kept=True,  note="换 Opus 4.7 判官",
-         runs=["probe_v22_a", "probe_v22_b"], era="D"),
-    dict(tag="D-3",     d=65.84, kept=False, note="精 40%→35%（挤压）",          era="D"),
-    dict(tag="D-4",     kept=False, note="扩填词表",
-         runs=["iter_004_a", "iter_004_b"], era="D"),
-    dict(tag="D-5",     kept=True,  note="去 --- 与 ## 标题",
-         runs=["iter_005_a", "iter_005_b"], era="D"),
-    dict(tag="D-5 ho",  kept=True,  note="holdout +5pp",
-         runs=["holdout_005"], era="D"),
-    dict(tag="D-6",     kept=False, note="删 SQL 示例",
-         runs=["iter_006_a", "iter_006_b"], era="D"),
-    dict(tag="D-6 ho",  kept=False, note="holdout −8pp",
-         runs=["holdout_006"], era="D"),
+    # Track D — autoskill under Opus 4.7 judge. All values hardcoded from
+    # RESULTS_v2.md (Track D iteration log + skill23-holdout-allgroups table)
+    # so the chart renders without trace files. Train scores are mean of two
+    # seeds (a/b); holdout is single-seed n=18.
+    dict(tag="D-probe",   d=67.2, kept=True,  note="换 Opus 4.7 判官",        era="D"),
+    dict(tag="D-3",       d=65.8, kept=False, note="精 40%→35%（挤压）",       era="D"),
+    dict(tag="D-4",       d=67.1, kept=False, note="扩填词表",                era="D"),
+    dict(tag="D-5",       d=69.5, kept=True,  note="去 --- 与 ## 标题",       era="D"),
+    # Per-level holdout for D-5 (run skill23-holdout-allgroups, RESULTS_v2.md
+    # line 318): shows level convergence — 简/精 close ~4pp gap to 文言, but
+    # 文言 itself plateaus at 74.5. April-2026 Opus-4.7 calibration confirmed
+    # judge-shift on 文言 ≈ 0 (v2.2-文言 = 74.4 under both Opus 4.6 and 4.7).
+    dict(tag="D-5 简 ho",  d=73.0, kept=True,  note="简 holdout +5pp vs C-简",  era="D"),
+    dict(tag="D-5 精 ho",  d=73.9, kept=True,  note="精 holdout +4pp vs C-精",  era="D"),
+    dict(tag="D-5 文言 ho", d=74.5, kept=True,  note="文言 持平（已饱和）",      era="D"),
+    dict(tag="D-6",       d=70.6, kept=False, note="删 SQL 示例（train 涨）",  era="D"),
+    dict(tag="D-6 ho",    d=64.4, kept=False, note="holdout −8pp（overfit）",  era="D"),
 ]
 
 
@@ -127,7 +130,8 @@ def render(out_path: Path):
     import matplotlib.font_manager as fm
     plt.style.use("seaborn-v0_8-whitegrid")
     cjk = next((c for c in ("Noto Sans CJK SC", "Noto Sans CJK",
-                            "WenQuanYi Zen Hei", "PingFang SC", "SimHei")
+                            "Noto Sans CJK JP", "WenQuanYi Zen Hei",
+                            "PingFang SC", "SimHei")
                 if c in {f.name for f in fm.fontManager.ttflist}), None)
     if cjk:
         plt.rcParams["font.family"] = cjk
@@ -222,7 +226,7 @@ def render(out_path: Path):
                        rotation=30, ha="right", color="#444")
 
     all_d = [e["d"] for e in events]
-    ax.set_ylim(min(all_d) - 8, max(all_d) + 14)
+    ax.set_ylim(min(all_d) - 4, max(all_d) + 8)
     ax.set_xlim(-0.7, n + 0.5)
     ax.tick_params(axis="y", labelsize=9.5, labelcolor="#444")
 
