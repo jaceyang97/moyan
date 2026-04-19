@@ -17,7 +17,9 @@ opening 71 JSON files.
 | `iter_004_a` / `_b` | Sonnet 4.6 | v2.2+填词 | train | — | autoskill iter 4 — discarded (−0.09pp noise) |
 | `iter_005_a` / `_b` | Sonnet 4.6 | v2.2+版式 | train | Opus 4.7 (a) | autoskill iter 5 — **KEEP**, train 0.6948 |
 | `holdout_005` | Sonnet 4.6 | v2.2+版式 | holdout | Opus 4.7 | iter 5 holdout — 0.7237 (+5.2pp) |
-| `skill23-holdout-allgroups` | Sonnet 4.6 | v2.2+版式 | holdout (4 groups) | — | 横向验证：简 76.2% / 精 73.1% / 文言文 70.9% — 级别排序翻转 |
+| `skill23-holdout-allgroups` | Sonnet 4.6 | v2.2+版式 | holdout (4 groups) | — | 横向验证：简 73.0% / 精 73.9% / 文言文 74.5% — 级别排序保持单调 |
+| `iter_006_a` / `_b` | Sonnet 4.6 | v2.2+版式−SQL 例 | train | Opus 4.7 | autoskill iter 6 — discarded (holdout-overfit) |
+| `holdout_006` | Sonnet 4.6 | v2.2+版式−SQL 例 | holdout | Opus 4.7 | iter 6 holdout — 0.6440 (−8pp)，SKILL.md 已回滚 |
 
 `.meta.json` holds the authoritative version of the above plus SKILL.md commit,
 byte length, sample count, and created_at. Always read `.meta.json` before
@@ -36,26 +38,22 @@ Legacy `v2-*` run_ids are frozen — do not invent new ones in that scheme.
 
 ## Secondary directories inside a run
 
-- `_judgments/` — primary judge verdicts (Opus 4.7 as of 2026-04)
-- `_judgments_kappa/{judge_model}/` — alternate-judge verdicts for κ
+- `_judgments/` — judge verdicts (Opus 4.7 as of 2026-04)
 - `_bench.log` — autoskill bench subprocess log
 
 ## Commands
 
 ```bash
 # Run a new benchmark (writes .meta.json automatically)
-python run.py --run-id sonnet-skill2.2 \
+python run.py --run-id sonnet-skill2.3 \
   --models claude-sonnet-4-6 \
   --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
   --samples 1 --prompt-file splits/holdout.txt \
-  --notes "v2.2 holdout validation"
+  --notes "holdout validation"
 
-# Summary stats
-python run_stats.py --run-id sonnet-skill2.2
+# Score one run (loop-internal metric)
+python evaluate.py --run-id sonnet-skill2.3 --baseline-run-id sonnet-baseline
 
-# Judge + κ
-python judge.py --run-id sonnet-skill2.2 --judge-model claude-opus-4-7
-python kappa.py judge2 --run-id sonnet-skill2.2 --judge-model claude-sonnet-4-6
-python kappa.py score  --run-id sonnet-skill2.2 \
-  --judge-a claude-opus-4-7 --judge-b claude-sonnet-4-6
+# With judge (full autoskill iter)
+python judge.py --run-id sonnet-skill2.3 --judge-model claude-opus-4-7
 ```

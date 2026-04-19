@@ -1,8 +1,6 @@
 # 莫言 · moyan
 
-中文省 token 模式，Claude Code 插件。
-
-想法来自 [caveman](https://github.com/JuliusBrussee/caveman)：caveman 让 Claude 用山顶洞人式英文回答省 token，moyan 换成简洁中文做同件事。三档级别：简 / 精 / 文言文，简繁体跟你输入走。
+中文省 token 模式，Claude Code 插件。三档级别：简 / 精 / 文言文，简繁体跟你输入走。
 
 ## 效果
 
@@ -12,20 +10,8 @@
 |------|------|
 | 原始 | 随着数据量增长，查询变慢通常有几个原因。首先检查是否在 WHERE 子句的字段上建立了索引；如果没有索引，数据库需要全表扫描，在百万级数据下会非常慢。其次看执行计划（EXPLAIN），确认是否走了预期的索引。另外，JOIN 的顺序和选择性也会影响性能。 |
 | 简 | 数据增长后几个常因：WHERE 字段无索引致全表扫描、执行计划未走预期索引、JOIN 顺序低效。先用 `EXPLAIN` 看计划。 |
-| 精 | 三大常因：WHERE 无索引 → 全表扫描、执行计划走错索引、JOIN 顺序差。先 `EXPLAIN`。 |
+| 精 | 三大常因：WHERE 无索引 → 全表扫描、执行计划走错、JOIN 顺序差。先 `EXPLAIN`。 |
 | 文言文 | 查询愈慢，多缘全表之扫。先以 `EXPLAIN` 察其执行之道，加索引于 `WHERE` 之列，则速矣。 |
-
-在 71 条编程问答上用 Sonnet 4.6 测了一轮，对比中文 normal 回答，output token 能省这么多（holdout 18 条）：
-
-| 级别 | 中位 | 均值 | 适合 |
-|---|---|---|---|
-| 简 | 68% | 64% | 正式文档、对外沟通 |
-| 精（默认）| 70% | 66% | 日常开发问答 |
-| 文言文 | **75%** | **68%** | debug、概念解释这类 |
-
-有意思的是，文言文在最难压的类目（debug / explain / howto）反而比精多省 8-12pp。语法天然就紧：没有的/了/着，介词少，倒装允许。
-
-但 commit 是例外。commit message 需要 feat / fix 这些英文关键字，文言文反而拖长。所以 SKILL.md 里规定 commit 不套级别压缩，老实走 Conventional Commits。
 
 ## 安装
 
@@ -54,15 +40,21 @@ git clone https://github.com/jaceyang97/moyan ~/.claude/plugins/moyan
 
 ## Benchmark
 
-71 条编程 prompt（v2 从 52 扩到 71），分 4 难度 × 8 类别，53 训 18 holdout。5 组对照：英文 normal、中文 normal、莫言三档。响应用 Sonnet 4.6，判官 Opus 4.6 —— 故意跨家族，避免自评。
+71 条编程 prompt（4 难度 × 8 类别，53 训 18 holdout），用 Sonnet 4.6 跑五组对照（英文 normal、中文 normal、莫言三档），Opus 4.7 做判官。SKILL.md 起初是手写 + autoskill 自迭代出来的；最新一轮把 SKILL 缩了 29% 同时加一条版式规则（去 `---` 横线与短答 `##` 标题），holdout 上又涨了 5pp。
+
+holdout 18 条，output token 相对中文 normal 省的中位数：
+
+| 级别 | 中位 | 均值 | 适合 |
+|---|---|---|---|
+| 简 | 73% | 67% | 正式文档、对外沟通 |
+| 精（默认）| 74% | 66% | 日常开发问答 |
+| 文言文 | **75%** | **68%** | debug、概念解释这类 |
+
+文言文在最难压的类目（debug / explain / howto）比精多省 8-12pp。语法天然就紧：没有的/了/着，介词少，倒装允许。但 commit 是例外 —— commit message 需要 feat / fix 这些英文关键字，文言文反而拖长。所以 SKILL.md 里规定 commit 不套级别压缩，走 Conventional Commits。
 
 ![progression](docs/progression.png)
 
-v1 手写规则从 52.7% 爬到 61%。Sonnet 4.5 升 4.6 自带 +5pp，切文言文再 +5pp 到 70.6%，然后 autoskill 4 轮自动迭代全 discard —— 规则层面撞天花板。最新一轮（v2.2）手动把 SKILL.md 裁掉 29%（7882 → 5561 bytes），把级别说法改成量化压缩目标（简 ≤60% / 精 ≤40% / 文言文 ≤30%），再加文言文助词清单。holdout 上精从 66 涨到 70%，文言文从 73 涨到 **74.5%**，当前最好。SKILL.md 更短、效果更好、输出更有区分度。
-
-同样的 SKILL.md 到 Haiku 4.5 上三档会坍缩成 53 / 55 / 52% —— Haiku 不太 follow 级别差异，这是模型能力限制，不是 SKILL.md 的锅。判官 κ = 0.21 说明 completeness 信号本身就有噪声，autoskill 的 quality gate 基于它而来，所以早期几轮 discard 也可能是判官漂移而非真退步。
-
-完整数字、per-category 表、Haiku/κ/cache 分析、复现命令：[`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md)。v1 历史：[`RESULTS.md`](benchmark/RESULTS.md)。autoskill loop 设计：[`benchmark/program.md`](benchmark/program.md)。
+完整数字、per-category 表、autoskill 迭代日志、复现命令：[`benchmark/RESULTS_v2.md`](benchmark/RESULTS_v2.md) · [`benchmark/program.md`](benchmark/program.md)。
 
 ## 仓库结构
 
@@ -73,10 +65,10 @@ moyan/
 ├── benchmark/                  # autoresearch 风格的自迭代 loop
 │   ├── program.md              # loop 规范（agent 自己跑，没有 Python 编排器）
 │   ├── evaluate.py             # 单标量指标
-│   ├── lib.py / run.py / judge.py
+│   ├── run.py / judge.py / lib.py
 │   ├── plot.py                 # 画 progression chart
 │   ├── prompts.jsonl / splits/
-│   └── results.tsv / RESULTS{,_v2}.md
+│   └── results.tsv / RESULTS{,_v2}.md / RUNS.md
 ├── docs/progression.png
 └── README.md / LICENSE
 ```
@@ -86,7 +78,6 @@ moyan/
 ## 致谢
 
 - [Julius Brussee / caveman](https://github.com/JuliusBrussee/caveman) —— 原作。这仓库的缘起是给 caveman 提了 PR [#76](https://github.com/JuliusBrussee/caveman/pull/76) 加中文支持，合得慢，索性单开一仓。
-- 莫言先生 —— 借名。
 
 ## License
 

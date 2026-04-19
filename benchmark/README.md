@@ -109,7 +109,7 @@ git show d63d923:benchmark/analyze.py   > /tmp/analyze_v1.py
 ## Known limitations
 
 - SKILL.md injection costs ~2k input tokens — only really nets out with prompt caching (long sessions)
-- LLM-as-judge has systematic verbosity bias; `completeness_full=0.70` threshold is the workaround
+- LLM-as-judge has systematic verbosity bias; `completeness_full=0.30` threshold is the Opus 4.7 calibration
 - `temperature=0` ≠ deterministic; n=2 seeds smooths but doesn't eliminate noise
 - Multi-turn coverage thin (3 prompts) — long-conversation effects under-measured
-- Holdout n=13; CIs are wide
+- Holdout n=18; CIs are wide
