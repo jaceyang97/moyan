@@ -6,12 +6,7 @@
 
 举个例子。问「我的 Docker 容器启动后立即退出，为什么？」：
 
-| 模式 | 回复 |
-|------|------|
-| 原始 | 好的，容器启动后立即退出通常有几个原因。最常见的是容器的主进程（ENTRYPOINT/CMD 指定的命令）执行完成或者崩溃了 —— 实际上 Docker 会跟随主进程的生命周期，主进程结束容器就停了。可以用 `docker logs <container-id>` 看退出前的输出，排查是不是报错退出。也有可能是 CMD 写法的问题，比如用 shell form 而不是 exec form 导致信号处理异常。如果是基于 scratch 或 distroless 镜像，还要确认二进制文件的架构是否匹配（x86_64 vs arm64）。 |
-| 简 | 容器主进程结束则容器停。三大常因：1) 主进程 crash — `docker logs <id>` 看输出；2) CMD 用了 shell form，改 exec form；3) 二进制架构不匹配（x86 vs arm）。 |
-| 精 | 主进程退 → 容器停。查：`docker logs <id>` / CMD 改 exec form / 架构对齐（x86 vs arm）。 |
-| 文言文 | 容器之生，系于主进程之存，主进程退则容器亡。先以 `docker logs <id>` 察其末言，次验 CMD 是否 exec form，终验架构符否（x86 vs arm）。 |
+![mode comparison](docs/mode-comparison.svg)
 
 ## 安装
 
