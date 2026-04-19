@@ -95,13 +95,11 @@ TIMELINE = [
     dict(tag="D-3",       d=65.8, kept=False, note="精 40%→35%（挤压）",       era="D"),
     dict(tag="D-4",       d=67.1, kept=False, note="扩填词表",                era="D"),
     dict(tag="D-5",       d=69.5, kept=True,  note="去 --- 与 ## 标题",       era="D"),
-    # Per-level holdout for D-5 (run skill23-holdout-allgroups, RESULTS_v2.md
-    # line 318): shows level convergence — 简/精 close ~4pp gap to 文言, but
-    # 文言 itself plateaus at 74.5. April-2026 Opus-4.7 calibration confirmed
+    # D-5 holdout collapsed — three levels (简 73.0 / 精 73.9 / 文言 74.5)
+    # from skill23-holdout-allgroups. Story: Track D pulled 简/精 toward
+    # 文言, 文言 itself saturated. April-2026 Opus-4.7 calibration confirmed
     # judge-shift on 文言 ≈ 0 (v2.2-文言 = 74.4 under both Opus 4.6 and 4.7).
-    dict(tag="D-5 简 ho",  d=73.0, kept=True,  note="简 holdout +5pp vs C-简",  era="D"),
-    dict(tag="D-5 精 ho",  d=73.9, kept=True,  note="精 holdout +4pp vs C-精",  era="D"),
-    dict(tag="D-5 文言 ho", d=74.5, kept=True,  note="文言 持平（已饱和）",      era="D"),
+    dict(tag="D-5 ho",    d=73.9, kept=True,  note="三档 73 / 73.9 / 74.5（简/精/文言）", era="D"),
     dict(tag="D-6",       d=70.6, kept=False, note="删 SQL 示例（train 涨）",  era="D"),
     dict(tag="D-6 ho",    d=64.4, kept=False, note="holdout −8pp（overfit）",  era="D"),
 ]
@@ -165,29 +163,42 @@ def render(out_path: Path):
             color=GREEN, linewidth=2.0, alpha=0.85,
             zorder=2, label="Running best")
 
-    # Points
+    # Tier each kept point: "advancer" if it set a new running-best, else "kept".
+    # Advancers get the big bold treatment; kept-not-advancer is a small dot
+    # without a label so it stops fighting for attention.
+    best_so_far = -1e9
     for e in events:
-        if e["kept"]:
-            ax.scatter(e["x"], e["d"], s=130, color=GREEN,
-                       edgecolor="white", linewidth=1.4, zorder=5)
+        if e["kept"] and e["d"] > best_so_far:
+            e["tier"] = "advancer"
+            best_so_far = e["d"]
+        elif e["kept"]:
+            e["tier"] = "kept"
         else:
-            ax.scatter(e["x"], e["d"], s=55, color=GRAY,
-                       edgecolor="none", zorder=4)
+            e["tier"] = "discard"
 
-    # Chinese notes — kept above (green), discarded below (gray), both angled
+    # Points + labels by tier
     for e in events:
-        if e["kept"]:
+        if e["tier"] == "advancer":
+            ax.scatter(e["x"], e["d"], s=160, color=GREEN,
+                       edgecolor="white", linewidth=1.6, zorder=6)
             ax.annotate(e["note"],
                         xy=(e["x"], e["d"]),
                         xytext=(6, 8),
                         textcoords="offset points",
-                        fontsize=9.5,
+                        fontsize=10,
                         color=GREEN,
                         ha="left", va="bottom",
                         rotation=30,
                         rotation_mode="anchor",
                         weight="semibold")
-        else:
+        elif e["tier"] == "kept":
+            ax.scatter(e["x"], e["d"], s=55, color=GREEN,
+                       edgecolor="white", linewidth=0.8,
+                       alpha=0.55, zorder=5)
+            # No label — exists for completeness, doesn't compete for attention.
+        else:  # discard
+            ax.scatter(e["x"], e["d"], s=45, color=GRAY,
+                       edgecolor="none", zorder=4)
             ax.annotate(e["note"],
                         xy=(e["x"], e["d"]),
                         xytext=(-6, -8),
@@ -232,7 +243,11 @@ def render(out_path: Path):
 
     handles = [
         plt.Line2D([], [], marker="o", color="w", markerfacecolor=GREEN,
-                   markeredgecolor="white", markersize=11, label="Kept"),
+                   markeredgecolor="white", markersize=12,
+                   label="新最佳 (advances best)"),
+        plt.Line2D([], [], marker="o", color="w", markerfacecolor=GREEN,
+                   markeredgecolor="white", markersize=7,
+                   alpha=0.55, label="Kept (持平)"),
         plt.Line2D([], [], marker="o", color="w", markerfacecolor=GRAY,
                    markeredgecolor="none", markersize=7, label="Discarded"),
         plt.Line2D([], [], color=GREEN, linewidth=2.0, label="Running best"),
