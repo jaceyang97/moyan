@@ -1,13 +1,18 @@
-"""Render docs/progression.png — moyan autoskill loop (karpathy-style).
+"""Render docs/progression.png — full moyan SKILL.md history.
 
-One point = one benchmark run (one seed, train split).
-y-axis  = per-prompt Δ_median against within-run B_zh_normal baseline (higher = more compression).
-x-axis  = experiment # (chronological order of autoskill jobs).
-green   = kept (improved BEST or first in loop); gray = discarded.
-step    = running best over kept experiments.
+One point per experiment from v0 (52.7%) all the way through the Opus 4.7
+autoskill loop. Every point has a short Chinese note describing what was
+changed. Gray = discarded, green = kept. Step line = running best.
 
-Scope is strictly the Opus 4.7 judge regime — directly comparable scores only.
-Historical v1/v2 ladder and Track C cross-model runs are intentionally excluded.
+x-axis = version labels (v0, v1·1, v2·0, v2.2, D-probe, D-iter5, ...).
+y-axis = Δ_median (token reduction %, higher is better).
+
+Scores come from three overlapping regimes:
+  - v1: Sonnet 4.5 + Sonnet judge (RESULTS.md)
+  - v2: Sonnet 4.6 + Opus 4.6 judge (RESULTS_v2.md Track B/C)
+  - Track D: Sonnet 4.6 + Opus 4.7 judge (results.tsv + traces)
+Regime shifts are marked with vertical dividers; scores are not perfectly
+comparable across regimes but the trajectory is clear.
 
 Regenerate:
     python benchmark/plot.py
@@ -24,13 +29,10 @@ from lib import BASELINE_GROUP
 
 BENCH = Path(__file__).resolve().parent
 TRAIN_SPLIT = BENCH / "splits" / "train.txt"
-
-
-BASELINE_RUN = "sonnet-baseline"  # shared B_zh_normal reference used by autoskill
+BASELINE_RUN = "sonnet-baseline"
 
 
 def per_prompt_deltas(run_id: str, moyan_group: str = "D_moyan_jing") -> list[float]:
-    """Per-prompt Δ = (1 - moyan_out / baseline_out) × 100, restricted to train split."""
     split_ids = {l.strip() for l in TRAIN_SPLIT.read_text().splitlines() if l.strip()}
 
     def totals(rid: str, group: str) -> dict[str, int]:
@@ -58,26 +60,58 @@ def per_prompt_deltas(run_id: str, moyan_group: str = "D_moyan_jing") -> list[fl
     return deltas
 
 
-# Autoskill loop (Opus 4.7 judge · Sonnet responder · train split · 精 default).
-# Verdict = iter-level pipeline decision, not per-seed comparison.
-EXPERIMENTS = [
-    dict(run="probe_v22_a", kept=True,  label="probe (baseline)"),
-    dict(run="probe_v22_b", kept=True),
-    dict(run="iter_004_a",  kept=False),
-    dict(run="iter_004_b",  kept=False),
-    dict(run="iter_005_a",  kept=True,  label="keep: 版式规则 (drop --- and ## in short answers)"),
-    dict(run="iter_005_b",  kept=True),
-    dict(run="iter_006_a",  kept=False, label="discard: train up, holdout -8pp"),
-    dict(run="iter_006_b",  kept=False),
+def median_of(run_id: str, group: str = "D_moyan_jing") -> float:
+    deltas = per_prompt_deltas(run_id, group)
+    return statistics.median(deltas) if deltas else float("nan")
+
+
+# Full timeline. d = Δ_median %, note = short Chinese description of the change.
+# `run`/`group` keys mean load from traces live; otherwise d is hardcoded from docs.
+TIMELINE = [
+    # v1 era — Sonnet 4.5 + Sonnet judge (RESULTS.md)
+    dict(tag="v0",      d=52.7, kept=True,  note="初版：去客套填词",             era="v1"),
+    dict(tag="v1·0",    d=52.3, kept=False, note="扩填词表",                     era="v1"),
+    dict(tag="v1·1",    d=56.5, kept=True,  note="比较题先给差异表",             era="v1"),
+    dict(tag="v1·2",    d=56.0, kept=False, note="枚举短表（措辞差）",           era="v1"),
+    dict(tag="v1·3",    d=61.0, kept=True,  note="枚举按优先级排",               era="v1"),
+    dict(tag="v1·4",    d=63.7, kept=False, note="答所问不旁支（崩）",           era="v1"),
+    # Model upgrade: no SKILL change
+    dict(tag="4.6",     d=65.8, kept=True,  note="换 Sonnet 4.5→4.6",            era="bump"),
+    # v2 era — Sonnet 4.6 + Opus 4.6 judge
+    dict(tag="v2·0",    d=67.8, kept=False, note="加枚举解法（完整性崩）",       era="v2"),
+    dict(tag="v2·1",    d=65.9, kept=False, note="扩『留』规则",                 era="v2"),
+    dict(tag="v2·2",    d=66.3, kept=False, note="紧级别表描述",                 era="v2"),
+    dict(tag="v2·3",    d=63.1, kept=False, note="换 example 为 debug",          era="v2"),
+    # Level-switch discovery
+    dict(tag="文言文",  d=70.7, kept=True,  note="切默认为文言文",               era="v2"),
+    # Track C — SKILL.md trim to v2.2 (Sonnet holdout scores)
+    dict(tag="C-精",    d=70.0, kept=True,  note="SKILL 缩 29%（精）",           era="C"),
+    dict(tag="C-文言",  d=74.5, kept=True,  note="SKILL 缩 29%（文言）",         era="C"),
+    # Track D — autoskill under Opus 4.7 judge (per-iter average from traces)
+    dict(tag="D-probe", kept=True,  note="换 Opus 4.7 判官",
+         runs=["probe_v22_a", "probe_v22_b"], era="D"),
+    dict(tag="D-3",     d=65.84, kept=False, note="精 40%→35%（挤压）",          era="D"),
+    dict(tag="D-4",     kept=False, note="扩填词表",
+         runs=["iter_004_a", "iter_004_b"], era="D"),
+    dict(tag="D-5",     kept=True,  note="去 --- 与 ## 标题",
+         runs=["iter_005_a", "iter_005_b"], era="D"),
+    dict(tag="D-5 ho",  kept=True,  note="holdout +5pp",
+         runs=["holdout_005"], era="D"),
+    dict(tag="D-6",     kept=False, note="删 SQL 示例",
+         runs=["iter_006_a", "iter_006_b"], era="D"),
+    dict(tag="D-6 ho",  kept=False, note="holdout −8pp",
+         runs=["holdout_006"], era="D"),
 ]
 
 
 def load():
-    for i, e in enumerate(EXPERIMENTS):
-        deltas = per_prompt_deltas(e["run"])
+    for i, e in enumerate(TIMELINE):
         e["x"] = i
-        e["d"] = statistics.median(deltas) if deltas else float("nan")
-    return EXPERIMENTS
+        if "runs" in e:
+            vals = [median_of(r) for r in e["runs"]]
+            vals = [v for v in vals if v == v]  # drop nan
+            e["d"] = statistics.mean(vals) if vals else float("nan")
+    return TIMELINE
 
 
 def running_best(events):
@@ -104,61 +138,100 @@ def render(out_path: Path):
     n = len(events)
     n_kept = sum(1 for e in events if e["kept"])
 
-    fig, ax = plt.subplots(figsize=(13, 6.5))
+    fig, ax = plt.subplots(figsize=(20, 9))
 
     GREEN = "#2ca02c"
-    GRAY  = "#c9c9c9"
+    GRAY  = "#b5b5b5"
     DARK  = "#1a1a1a"
 
+    # Era dividers (faint, between era transitions)
+    era_bounds = {}
+    for e in events:
+        era_bounds.setdefault(e["era"], []).append(e["x"])
+    prev_era = None
+    for e in events:
+        if prev_era is not None and e["era"] != prev_era:
+            ax.axvline(e["x"] - 0.5, color="#999", linestyle=":",
+                       alpha=0.4, zorder=1, linewidth=1)
+        prev_era = e["era"]
+
+    # Running-best staircase
     bsf = running_best(events)
     ax.step([e["x"] for e in events], bsf, where="post",
-            color=GREEN, linewidth=2.2, alpha=0.85,
+            color=GREEN, linewidth=2.0, alpha=0.85,
             zorder=2, label="Running best")
 
-    # Points: kept = solid green (large), discarded = pale gray (small)
+    # Points
     for e in events:
         if e["kept"]:
-            ax.scatter(e["x"], e["d"], s=150, color=GREEN,
-                       edgecolor="white", linewidth=1.5, zorder=5)
+            ax.scatter(e["x"], e["d"], s=130, color=GREEN,
+                       edgecolor="white", linewidth=1.4, zorder=5)
         else:
-            ax.scatter(e["x"], e["d"], s=50, color=GRAY,
+            ax.scatter(e["x"], e["d"], s=55, color=GRAY,
                        edgecolor="none", zorder=4)
 
-    # Labels — only on annotated events, angled up-right, karpathy style
+    # Chinese notes — kept above (green), discarded below (gray), both angled
     for e in events:
-        if not e.get("label"):
-            continue
-        ax.annotate(e["label"],
-                    xy=(e["x"], e["d"]),
-                    xytext=(8, 6),
-                    textcoords="offset points",
-                    fontsize=9.5,
-                    color=GREEN if e["kept"] else "#888",
-                    style="italic",
-                    rotation=18,
-                    ha="left", va="bottom")
+        if e["kept"]:
+            ax.annotate(e["note"],
+                        xy=(e["x"], e["d"]),
+                        xytext=(6, 8),
+                        textcoords="offset points",
+                        fontsize=9.5,
+                        color=GREEN,
+                        ha="left", va="bottom",
+                        rotation=30,
+                        rotation_mode="anchor",
+                        weight="semibold")
+        else:
+            ax.annotate(e["note"],
+                        xy=(e["x"], e["d"]),
+                        xytext=(-6, -8),
+                        textcoords="offset points",
+                        fontsize=9,
+                        color="#888",
+                        ha="right", va="top",
+                        rotation=30,
+                        rotation_mode="anchor")
 
-    # Title
-    ax.set_title(f"Moyan autoskill: {n} experiments, {n_kept} kept improvements",
+    # Era band labels at top
+    era_names = {
+        "v1":   "v1 · Sonnet 4.5",
+        "bump": "模型升级",
+        "v2":   "v2 · Sonnet 4.6 + Opus 4.6 判官",
+        "C":    "Track C · SKILL 精简",
+        "D":    "Track D · Opus 4.7 判官 autoskill",
+    }
+    y_top = max(e["d"] for e in events) + 6
+    for era, xs in era_bounds.items():
+        mid = (min(xs) + max(xs)) / 2
+        ax.text(mid, y_top, era_names[era],
+                fontsize=9, color="#666", ha="center", va="bottom",
+                style="italic",
+                bbox=dict(facecolor="white", edgecolor="#ddd",
+                          alpha=0.9, pad=3, boxstyle="round,pad=0.35"))
+
+    ax.set_title(f"Moyan SKILL.md 演进：{n} 次实验，{n_kept} 次 kept",
                  fontsize=14, pad=12, color=DARK, weight="semibold")
-
-    ax.set_xlabel("Experiment #", fontsize=11, color="#444")
-    ax.set_ylabel("Δ_median  (token reduction %, higher is better)",
+    ax.set_xlabel("版本号", fontsize=11, color="#444")
+    ax.set_ylabel("Δ_median  (token 节省 %，越高越好)",
                   fontsize=11, color="#444")
 
     ax.set_xticks([e["x"] for e in events])
-    all_d = [e["d"] for e in events]
-    ax.set_ylim(min(all_d) - 3, max(all_d) + 4)
-    ax.set_xlim(-0.5, n - 0.5)
-    ax.tick_params(labelsize=9.5, labelcolor="#444")
+    ax.set_xticklabels([e["tag"] for e in events], fontsize=9,
+                       rotation=30, ha="right", color="#444")
 
-    # Minimal legend
+    all_d = [e["d"] for e in events]
+    ax.set_ylim(min(all_d) - 8, max(all_d) + 14)
+    ax.set_xlim(-0.7, n + 0.5)
+    ax.tick_params(axis="y", labelsize=9.5, labelcolor="#444")
+
     handles = [
         plt.Line2D([], [], marker="o", color="w", markerfacecolor=GREEN,
                    markeredgecolor="white", markersize=11, label="Kept"),
         plt.Line2D([], [], marker="o", color="w", markerfacecolor=GRAY,
                    markeredgecolor="none", markersize=7, label="Discarded"),
-        plt.Line2D([], [], color=GREEN, linewidth=2.2, label="Running best"),
+        plt.Line2D([], [], color=GREEN, linewidth=2.0, label="Running best"),
     ]
     ax.legend(handles=handles, loc="lower right", fontsize=9.5,
               framealpha=0.95, edgecolor="#ddd")
