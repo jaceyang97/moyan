@@ -309,7 +309,22 @@ Track C 以 SKILL.md v2.2 收尾后，重建 regime：
 1. **结构规则 > 词表扩张。** 去横线/去短标题是单一最大单项改进：train +2.3pp、holdout +5.2pp（+5.2 > +2.3 表示规则泛化，不是 train 过拟合）。
 2. **Opus 4.7 判官比 4.6 严约 12pp full-rate。** 同一 SKILL.md 同一 traces，Opus 4.6 full=0.44，Opus 4.7 full=0.315。目标从 0.40 调到 0.30 后，模型再次进入「能通过 gate」的区间。
 3. **v2.2 plateau 被 v2.3 打破。** 新 BEST：训练 0.6948 / holdout 0.7237（注：与 Track C 的 74.5% 不直接可比，Track C 是文言文 holdout，本表是精 train/holdout。指标口径不同）。
-4. **SKILL.md 最新版**是 `485f1ef`（在 v2.2 基础上加一行版式规则）。frontmatter 未改，仍标记 `version: "2.2"`——下次语义级版本跳跃时一起升。
+4. **SKILL.md 最新版**是 `485f1ef`（在 v2.2 基础上加一行版式规则）。
+
+### 横向验证：版式规则对三档级别的效果（holdout, n=16）
+
+`run_id=skill23-holdout-allgroups`，vs `sonnet-baseline` 的 B_zh_normal。
+
+| 级别 | Track C v2.2 holdout | **Track D iter 5 holdout** | Δ |
+|---|---|---|---|
+| 简     | 66.1% | **76.2%** | **+10.1pp** |
+| 精     | 65.5% | 73.1%     | +7.6pp |
+| 文言文 | **73.0%** | 70.9% | −2.1pp |
+
+**级别排序翻转**：从「简 < 精 < 文言文」变为「**文言文 < 精 < 简**」。
+- 简/精 重度用 markdown 分层（`##`、`---`），版式规则直接削掉这些装饰 → 大涨。
+- 文言文本就扁平叙述（一段连贯文言，少用 markdown），规则无施力点 → 持平（−2.1pp 在 n=16 噪声内）。
+- 设计含义：「简」不再只是「技术文档版」的定位，而真正是 token 最省的级别。下次可考虑把「文言文 = 最省」的旧说法从 frontmatter 拿掉。
 
 ### 复现 Track D
 
@@ -321,11 +336,17 @@ BASELINE_RUN_ID=sonnet-baseline
 python evaluate.py --run-id probe_v22_a --baseline-run-id $BASELINE_RUN_ID
 python evaluate.py --run-id probe_v22_b --baseline-run-id $BASELINE_RUN_ID
 
-# 结构性 iter（当前 BEST 版）
+# 精 iter 5（训练）
 python evaluate.py --run-id iter_005_a --baseline-run-id $BASELINE_RUN_ID
 python evaluate.py --run-id iter_005_b --baseline-run-id $BASELINE_RUN_ID
 python evaluate.py --run-id iter_005_a --baseline-run-id $BASELINE_RUN_ID --with-judge --skip-bench
 python evaluate.py --run-id holdout_005 --baseline-run-id $BASELINE_RUN_ID --split holdout --with-judge
+
+# 三档横向验证（holdout）
+python run.py --run-id skill23-holdout-allgroups \
+  --groups B_zh_normal,C_moyan_jian,D_moyan_jing,E_moyan_wenyan \
+  --models claude-sonnet-4-6 --samples 1 --prompt-file splits/holdout.txt
+python run_stats.py --run-id skill23-holdout-allgroups
 ```
 
 ---

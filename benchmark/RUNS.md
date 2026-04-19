@@ -17,6 +17,7 @@ opening 71 JSON files.
 | `iter_004_a` / `_b` | Sonnet 4.6 | v2.2+填词 | train | — | autoskill iter 4 — discarded (−0.09pp noise) |
 | `iter_005_a` / `_b` | Sonnet 4.6 | v2.2+版式 | train | Opus 4.7 (a) | autoskill iter 5 — **KEEP**, train 0.6948 |
 | `holdout_005` | Sonnet 4.6 | v2.2+版式 | holdout | Opus 4.7 | iter 5 holdout — 0.7237 (+5.2pp) |
+| `skill23-holdout-allgroups` | Sonnet 4.6 | v2.2+版式 | holdout (4 groups) | — | 横向验证：简 76.2% / 精 73.1% / 文言文 70.9% — 级别排序翻转 |
 
 `.meta.json` holds the authoritative version of the above plus SKILL.md commit,
 byte length, sample count, and created_at. Always read `.meta.json` before
