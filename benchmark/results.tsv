@@ -6,3 +6,4 @@ f0ed097	0.6718	skip	keep	probe v2.2 — new regime BEST (n=2 seed avg 0.6748/0.6
 iter_003	0.6584	skip	discard	精 ≤40%→≤35% — a=0.6469 b=0.6698 均 -1.3pp（SKILL 已回滚）
 iter_004	0.6709	skip	discard	填词 += 同时/具体/本身 — n=2 均 0.6709，-0.09pp 噪声内（SKILL 已回滚）
 485f1ef	0.6948	0.7237	keep	版式规则：去 --- 横线与短答 ## 标题 — train +2.3pp / holdout +5.2pp / full_rate 0.40
+iter_006	0.7059	0.6440	discard	删 枚举原因 SQL 示例块 — train +1.1pp / holdout -8pp / 示例块作 few-shot 锚点，删则失泛化

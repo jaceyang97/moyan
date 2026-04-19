@@ -311,20 +311,37 @@ Track C 以 SKILL.md v2.2 收尾后，重建 regime：
 3. **v2.2 plateau 被 v2.3 打破。** 新 BEST：训练 0.6948 / holdout 0.7237（注：与 Track C 的 74.5% 不直接可比，Track C 是文言文 holdout，本表是精 train/holdout。指标口径不同）。
 4. **SKILL.md 最新版**是 `485f1ef`（在 v2.2 基础上加一行版式规则）。
 
-### 横向验证：版式规则对三档级别的效果（holdout, n=16）
+### 横向验证：版式规则对三档级别的效果（holdout, n=18, 各 run 内部 B_zh_normal 对照）
 
-`run_id=skill23-holdout-allgroups`，vs `sonnet-baseline` 的 B_zh_normal。
+`run_id=skill23-holdout-allgroups` — v2.2 SKILL + 版式规则一起跑，各组与同一 run 内的 B_zh_normal 配对。
 
 | 级别 | Track C v2.2 holdout | **Track D iter 5 holdout** | Δ |
 |---|---|---|---|
-| 简     | 66.1% | **76.2%** | **+10.1pp** |
-| 精     | 65.5% | 73.1%     | +7.6pp |
-| 文言文 | **73.0%** | 70.9% | −2.1pp |
+| 简     | 68.1% | **73.0%** | **+4.9pp** |
+| 精     | 70.0% | **73.9%** | **+3.9pp** |
+| 文言文 | 74.5% | 74.5%     | 0.0pp |
 
-**级别排序翻转**：从「简 < 精 < 文言文」变为「**文言文 < 精 < 简**」。
-- 简/精 重度用 markdown 分层（`##`、`---`），版式规则直接削掉这些装饰 → 大涨。
-- 文言文本就扁平叙述（一段连贯文言，少用 markdown），规则无施力点 → 持平（−2.1pp 在 n=16 噪声内）。
-- 设计含义：「简」不再只是「技术文档版」的定位，而真正是 token 最省的级别。下次可考虑把「文言文 = 最省」的旧说法从 frontmatter 拿掉。
+**级别排序保持单调（简 < 精 < 文言文），但简/精 向文言文收敛。** 三档差距从 6.4pp 收窄到 1.5pp。
+- 简/精 重度用 markdown 分层（`##`、`---`），版式规则直接削掉这些装饰 → +4pp 级别涨幅。
+- 文言文本就扁平（一段连贯文言，少用 markdown），规则无施力点 → 持平。
+- 设计含义：**文言文 仍是最省级别**，但优势大幅缩小。简/精 对日常开发问答已足够接近文言文，用户选择不再基于 token 成本，而基于可读性偏好。
+
+> **之前声称过"级别排序翻转"（commit `09db6fd`）是方法瑕疵**：用了 paired n=16（只保留所有 run 都有的 prompt）并跨 run 对 baseline（skill23 vs sonnet-baseline）。修正后的对比用各 run 内部 B_zh_normal 配对 + 全 n=18，方向相反。保留旧 commit 作为方法自省记录。
+
+### Iter 6：删除 枚举原因 SQL 示例块（discard:holdout-overfit）
+
+继续 autoskill。假设：枚举原因规则的 3 行 worked example 可能冗余（规则文字已说明"3-4 条短表，格式 `[原因] — [验证法]`"）。删之测试。
+
+结果：
+- Train n=2：a=0.6974 / b=0.7144 → 0.7059（+1.1pp vs BEST 0.6948）
+- Holdout：**0.6440（−8.0pp vs BEST 0.7237）** 🚨
+- 判官 full_rate：0.40 on holdout（完整性无崩）
+
+训练涨、留存崩，判定 `discard:holdout-overfit`。SKILL.md 回滚。
+
+**核心发现**：该 SQL 示例是**留存泛化的锚点**，非装饰。规则文字描述 `[原因] — [验证法]` 格式，模型在 train 上可以从 prompt 特征学到；但在 holdout（未见 prompt）上没有 worked example 给它照着办，就退回到没那么结构化的回答。这是 worked-example 在 few-shot 语境下的典型作用。
+
+删节 SKILL.md 体积有风险 —— 下次精简要区分「装饰文本」vs「示例锚点」。
 
 ### 复现 Track D
 
